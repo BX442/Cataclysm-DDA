@@ -1,16 +1,18 @@
+#include "catch/catch.hpp"
+
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
-#include <utility>
+#include <iostream>
+#include <string>
 
 #include "avatar.h"
-#include "calendar.h"
-#include "creature.h"
 #include "item.h"
 #include "melee.h"
-#include "player.h"
-#include "type_id.h"
-
-#include "catch/catch.hpp"
+#include "monster.h"
 #include "player_helpers.h"
+#include "ret_val.h"
+#include "type_id.h"
 
 // Run a large number of trials of a player attacking a monster with a given weapon,
 // and return the average damage done per second.
@@ -332,8 +334,8 @@ TEST_CASE( "expected weapon dps", "[expected][dps]" )
         calc_expected_dps( test_guy, "halligan", 15.25 );
         calc_expected_dps( test_guy, "stick_long", 6.0 );
     }
-    SECTION( "two-handed flails" ) { // expected value ideally around 28
-        calc_expected_dps( test_guy, "2h_flail_steel", 25.0 );
+    SECTION( "two-handed flails" ) { // expected value ideally around 20
+        calc_expected_dps( test_guy, "2h_flail_steel", 21.0 );
         calc_expected_dps( test_guy, "2h_flail_wood", 20.0 );
         calc_expected_dps( test_guy, "homewrecker", 13.0 );
     }

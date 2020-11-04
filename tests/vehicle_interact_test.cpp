@@ -1,17 +1,18 @@
-#include <memory>
+#include "catch/catch.hpp"
+
 #include <string>
 #include <vector>
 
-#include "calendar.h"
-#include "catch/catch.hpp"
 #include "character.h"
 #include "inventory.h"
 #include "item.h"
+#include "item_pocket.h"
 #include "map.h"
 #include "map_helpers.h"
 #include "player_helpers.h"
 #include "point.h"
 #include "requirements.h"
+#include "ret_val.h"
 #include "type_id.h"
 #include "veh_type.h"
 #include "vehicle.h"
@@ -31,7 +32,8 @@ static void test_repair( const std::vector<item> &tools, bool expect_craftable )
     }
 
     const tripoint vehicle_origin = test_origin + tripoint_south_east;
-    vehicle *veh_ptr = get_map().add_vehicle( vproto_id( "bicycle" ), vehicle_origin, -90, 0, 0 );
+    vehicle *veh_ptr = get_map().add_vehicle( vproto_id( "bicycle" ), vehicle_origin, -90_degrees,
+                       0, 0 );
     REQUIRE( veh_ptr != nullptr );
     // Find the frame at the origin.
     vehicle_part *origin_frame = nullptr;

@@ -73,7 +73,8 @@
     <ClCompile>
       <WarningLevel>Level1</WarningLevel>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <SDLCheck>true</SDLCheck>
+      <SDLCheck>false</SDLCheck>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
       <CompileAsManaged>false</CompileAsManaged>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <MinimalRebuild>false</MinimalRebuild>
@@ -130,7 +131,7 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\src\*.h" Exclude ="..src\message.h" />
+    <ClInclude Include="..\src\*.h" Exclude="..src\message.h" />
     <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <ItemGroup>

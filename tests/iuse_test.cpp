@@ -1,19 +1,18 @@
-#include <array>
+#include "catch/catch.hpp"
+
+#include <cmath>
 #include <cstdlib>
 #include <memory>
 #include <string>
 
 #include "avatar.h"
-#include "bodypart.h"
 #include "calendar.h"
-#include "catch/catch.hpp"
+#include "flag.h"
 #include "item.h"
 #include "itype.h"
 #include "morale_types.h"
 #include "type_id.h"
 #include "value_ptr.h"
-
-static const std::string flag_WET( "WET" );
 
 TEST_CASE( "eyedrops", "[iuse][eyedrops]" )
 {
@@ -339,10 +338,6 @@ TEST_CASE( "towel", "[iuse][towel]" )
         REQUIRE( dummy.get_part_wetness( bodypart_id( "arm_l" ) ) > 0 );
         REQUIRE( dummy.get_part_wetness( bodypart_id( "arm_r" ) ) > 0 );
 
-        // FIXME: Morale alone is the trigger for drying off!
-        // Without the morale modifier, towel_common thinks you're dry
-        dummy.add_morale( MORALE_WET, -10, -10, 1_hours, 1_hours );
-
         WHEN( "they use a dry towel" ) {
             REQUIRE_FALSE( towel.has_flag( flag_WET ) );
             dummy.invoke_item( &towel );
@@ -374,6 +369,8 @@ TEST_CASE( "towel", "[iuse][towel]" )
     }
 
     GIVEN( "avatar has poor morale due to being wet" ) {
+        dummy.drench( 100, { bodypart_str_id( "torso" ), bodypart_str_id( "head" ), bodypart_str_id( "arm_l" ), bodypart_str_id( "arm_r" ) },
+                      false );
         dummy.add_morale( MORALE_WET, -10, -10, 1_hours, 1_hours );
         REQUIRE( dummy.has_morale( MORALE_WET ) == -10 );
 

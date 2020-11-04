@@ -1,7 +1,6 @@
 #include "pickup.h"
 
 #include <algorithm>
-#include <climits>
 #include <cstddef>
 #include <functional>
 #include <list>
@@ -11,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "activity_actor.h"
 #include "auto_pickup.h"
 #include "cata_utility.h"
 #include "catacharset.h"
@@ -41,13 +41,17 @@
 #include "point.h"
 #include "popup.h"
 #include "ret_val.h"
+#include "sdltiles.h"
 #include "string_formatter.h"
+#include "string_id.h"
 #include "string_input_popup.h"
 #include "translations.h"
 #include "type_id.h"
 #include "ui.h"
 #include "ui_manager.h"
 #include "units.h"
+#include "units_fwd.h"
+#include "units_utility.h"
 #include "vehicle.h"
 #include "vehicle_selector.h"
 #include "vpart_position.h"
@@ -146,7 +150,7 @@ static pickup_answer handle_problematic_pickup( const item &it, bool &offered_sw
 
     offered_swap = true;
     // TODO: Gray out if not enough hands
-    if( u.is_armed() ) {
+    if( u.has_wield_conflicts( it ) ) {
         amenu.addentry( WIELD, u.can_unwield( u.weapon ).success(), 'w',
                         _( "Dispose of %s and wield %s" ), u.weapon.display_name(),
                         it.display_name() );
@@ -175,12 +179,13 @@ bool Pickup::query_thief()
 {
     Character &u = get_player_character();
     const bool force_uc = get_option<bool>( "FORCE_CAPITAL_YN" );
-    const auto &allow_key = force_uc ? input_context::disallow_lower_case
+    const auto &allow_key = force_uc ? input_context::disallow_lower_case_or_non_modified_letters
                             : input_context::allow_all_keys;
     std::string answer = query_popup()
+                         .preferred_keyboard_mode( keyboard_mode::keycode )
                          .allow_cancel( false )
                          .context( "YES_NO_ALWAYS_NEVER" )
-                         .message( "%s", force_uc
+                         .message( "%s", force_uc && !is_keycode_mode_supported()
                                    ? _( "Picking up this item will be considered stealing, continue?  (Case sensitive)" )
                                    : _( "Picking up this item will be considered stealing, continue?" ) )
                          .option( "YES", allow_key ) // yes, steal all items in this location that is selected
@@ -260,7 +265,7 @@ bool pick_one_up( item_location &loc, int quantity, bool &got_water, bool &offer
         }
     } else if( newit.made_of_from_type( phase_id::LIQUID ) && !newit.is_frozen_liquid() ) {
         got_water = true;
-    } else if( !player_character.can_pickWeight( newit, false ) ) {
+    } else if( !player_character.can_pickWeight_partial( newit, false ) ) {
         if( !autopickup ) {
             const std::string &explain = string_format( _( "The %s is too heavy!" ),
                                          newit.display_name() );
@@ -278,7 +283,7 @@ bool pick_one_up( item_location &loc, int quantity, bool &got_water, bool &offer
         } else {
             option = CANCEL;
         }
-    } else if( !player_character.can_stash( newit ) ) {
+    } else if( !player_character.can_stash_partial( newit ) ) {
         if( !autopickup ) {
             const std::string &explain = string_format( _( "Not enough capacity to stash %s" ),
                                          newit.display_name() );
@@ -302,13 +307,9 @@ bool pick_one_up( item_location &loc, int quantity, bool &got_water, bool &offer
             picked_up = !!player_character.wear_item( newit );
             break;
         case WIELD: {
-            const auto wield_check = player_character.can_wield( it );
+            const auto wield_check = player_character.can_wield( newit );
             if( wield_check.success() ) {
-                //using original item, possibly modifying it
-                picked_up = player_character.wield( it );
-                if( picked_up ) {
-                    player_character.weapon.charges = newit.charges;
-                }
+                picked_up = player_character.wield( newit );
                 if( player_character.weapon.invlet ) {
                     add_msg( m_info, _( "Wielding %c - %s" ), player_character.weapon.invlet,
                              player_character.weapon.display_name() );
@@ -329,12 +330,41 @@ bool pick_one_up( item_location &loc, int quantity, bool &got_water, bool &offer
             picked_up = it.spill_contents( player_character );
             if( !picked_up ) {
                 break;
+            } else {
+                const int invlet = newit.invlet;
+                newit = it;
+                newit.invlet = invlet;
             }
         // Intentional fallthrough
         case STASH: {
-            item &added_it = player_character.i_add( newit, true, nullptr, /*allow_drop=*/false );
+            item &added_it = player_character.i_add( newit, true, nullptr, /*allow_drop=*/false,
+                             !newit.count_by_charges() );
             if( added_it.is_null() ) {
-                // failed to add, do nothing
+                // failed to add, fill pockets if it's a stack
+                if( newit.count_by_charges() ) {
+                    int remaining_charges = newit.charges;
+                    if( player_character.weapon.can_contain_partial( newit ) ) {
+                        int used_charges = player_character.weapon.fill_with( newit, remaining_charges );
+                        remaining_charges -= used_charges;
+                    }
+                    for( item &i : player_character.worn ) {
+                        if( remaining_charges == 0 ) {
+                            break;
+                        }
+                        if( i.can_contain_partial( newit ) ) {
+                            int used_charges = i.fill_with( newit, remaining_charges );
+                            remaining_charges -= used_charges;
+                        }
+                    }
+                    newit.charges -= remaining_charges;
+                    newit.on_pickup( player_character );
+                    if( newit.charges != 0 ) {
+                        auto &entry = mapPickup[newit.tname()];
+                        entry.second += newit.charges;
+                        entry.first = newit;
+                        picked_up = true;
+                    }
+                }
             } else if( &added_it == &it ) {
                 // merged to the original stack, restore original charges
                 it.charges -= newit.charges;
@@ -342,9 +372,10 @@ bool pick_one_up( item_location &loc, int quantity, bool &got_water, bool &offer
                 // successfully added
                 auto &entry = mapPickup[newit.tname()];
                 entry.second += newit.count();
-                entry.first = added_it;
+                entry.first = newit;
                 picked_up = true;
             }
+
             break;
         }
     }
@@ -360,6 +391,8 @@ bool pick_one_up( item_location &loc, int quantity, bool &got_water, bool &offer
             loc.remove_item();
         }
         player_character.moves -= moves_taken;
+        player_character.flag_encumbrance();
+        player_character.invalidate_weight_carried_cache();
     }
 
     return picked_up || !did_prompt;
@@ -608,7 +641,7 @@ void Pickup::pick_up( const tripoint &p, int min, from_where get_items_from )
 
         std::string action;
         int raw_input_char = ' ';
-        input_context ctxt( "PICKUP" );
+        input_context ctxt( "PICKUP", keyboard_mode::keychar );
         ctxt.register_action( "UP" );
         ctxt.register_action( "DOWN" );
         ctxt.register_action( "RIGHT" );
@@ -623,6 +656,7 @@ void Pickup::pick_up( const tripoint &p, int min, from_where get_items_from )
         ctxt.register_action( "ANY_INPUT" );
         ctxt.register_action( "HELP_KEYBINDINGS" );
         ctxt.register_action( "FILTER" );
+        ctxt.register_action( "SELECT" );
 #if defined(__ANDROID__)
         ctxt.allow_text_entry = true; // allow user to specify pickup amount
 #endif
@@ -669,6 +703,7 @@ void Pickup::pick_up( const tripoint &p, int min, from_where get_items_from )
             const std::string pickup_chars = ctxt.get_available_single_char_hotkeys( all_pickup_chars );
 
             werase( w_pickup );
+            pickup_rect::list.clear();
             for( int cur_it = start; cur_it < start + maxitems; cur_it++ ) {
                 if( cur_it < static_cast<int>( matches.size() ) ) {
                     int true_it = matches[cur_it];
@@ -739,8 +774,11 @@ void Pickup::pick_up( const tripoint &p, int min, from_where get_items_from )
                         item_name = string_format( "<color_light_red>!</color> %s", item_name );
                     }
 
-                    trim_and_print( w_pickup, point( 6, 1 + ( cur_it % maxitems ) ), pickupW - 4, icolor,
-                                    item_name );
+                    int y = 1 + ( cur_it % maxitems );
+                    trim_and_print( w_pickup, point( 6, y ), pickupW - 4, icolor, item_name );
+                    pickup_rect rect = pickup_rect( point( 6, y ), point( 6 + pickupW - 4 - 1, y ) );
+                    rect.cur_it = cur_it;
+                    pickup_rect::list.push_back( rect );
                 }
             }
 
@@ -784,6 +822,8 @@ void Pickup::pick_up( const tripoint &p, int min, from_where get_items_from )
         // Continue until we hit return or space
         do {
             const std::string pickup_chars = ctxt.get_available_single_char_hotkeys( all_pickup_chars );
+            // -2 lines for border, -2 to preserve a line at top/bottom for context
+            const int scroll_lines = catacurses::getmaxy( w_item_info ) - 4;
             int idx = -1;
 
             if( action == "ANY_INPUT" &&
@@ -794,10 +834,23 @@ void Pickup::pick_up( const tripoint &p, int min, from_where get_items_from )
                 if( itemcount < 0 ) {
                     itemcount = 0;
                 }
+            } else if( action == "SELECT" ) {
+                cata::optional<point> pos = ctxt.get_coordinates_text( w_pickup );
+                if( pos ) {
+                    if( window_contains_point_relative( w_pickup, pos.value() ) ) {
+                        pickup_rect *rect = pickup_rect::find_by_coordinate( pos.value() );
+                        if( rect != nullptr ) {
+                            selected = rect->cur_it;
+                            iScrollPos = 0;
+                            idx = selected;
+                        }
+                    }
+                }
+
             } else if( action == "SCROLL_UP" ) {
-                iScrollPos--;
+                iScrollPos -= scroll_lines;
             } else if( action == "SCROLL_DOWN" ) {
-                iScrollPos++;
+                iScrollPos += scroll_lines;
             } else if( action == "PREV_TAB" ) {
                 if( start > 0 ) {
                     start -= maxitems;
@@ -866,7 +919,7 @@ void Pickup::pick_up( const tripoint &p, int min, from_where get_items_from )
                 iScrollPos = 0;
             } else if( action == "SELECT_ALL" ) {
                 int count = 0;
-                for( auto i : matches ) {
+                for( int i : matches ) {
                     if( getitem[i].pick ) {
                         count++;
                     }
@@ -970,7 +1023,7 @@ void Pickup::pick_up( const tripoint &p, int min, from_where get_items_from )
 
         bool item_selected = false;
         // Check if we have selected an item.
-        for( auto selection : getitem ) {
+        for( pickup_count selection : getitem ) {
             if( selection.pick ) {
                 item_selected = true;
             }
@@ -1035,36 +1088,17 @@ void Pickup::pick_up( const tripoint &p, int min, from_where get_items_from )
 //helper function for Pickup::pick_up
 void show_pickup_message( const PickupMap &mapPickup )
 {
-    for( auto &entry : mapPickup ) {
+    for( const auto &entry : mapPickup ) {
         if( entry.second.first.invlet != 0 ) {
             add_msg( _( "You pick up: %d %s [%c]" ), entry.second.second,
                      entry.second.first.display_name( entry.second.second ), entry.second.first.invlet );
+        } else if( entry.second.first.count_by_charges() ) {
+            add_msg( _( "You pick up: %s" ), entry.second.first.display_name( entry.second.second ) );
         } else {
             add_msg( _( "You pick up: %d %s" ), entry.second.second,
                      entry.second.first.display_name( entry.second.second ) );
         }
     }
-}
-
-bool Pickup::handle_spillable_contents( Character &c, item &it, map &m )
-{
-    if( it.is_bucket_nonempty() ) {
-        it.contents.spill_open_pockets( c );
-
-        // If bucket is still not empty then player opted not to handle the
-        // rest of the contents
-        if( !it.contents.empty() ) {
-            c.add_msg_player_or_npc(
-                _( "To avoid spilling its contents, you set your %1$s on the %2$s." ),
-                _( "To avoid spilling its contents, <npcname> sets their %1$s on the %2$s." ),
-                it.display_name(), m.name( c.pos() )
-            );
-            m.add_item_or_charges( c.pos(), it );
-            return true;
-        }
-    }
-
-    return false;
 }
 
 int Pickup::cost_to_move_item( const Character &who, const item &it )
@@ -1081,4 +1115,16 @@ int Pickup::cost_to_move_item( const Character &who, const item &it )
 
     // Keep it sane - it's not a long activity
     return std::min( 400, ret );
+}
+
+std::vector<Pickup::pickup_rect> Pickup::pickup_rect::list;
+
+Pickup::pickup_rect *Pickup::pickup_rect::find_by_coordinate( const point &p )
+{
+    for( pickup_rect &rect : pickup_rect::list ) {
+        if( rect.contains( p ) ) {
+            return &rect;
+        }
+    }
+    return nullptr;
 }
