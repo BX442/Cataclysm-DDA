@@ -60,6 +60,7 @@
 #include "line.h"
 #include "magic.h"
 #include "magic_enchantment.h"
+#include "make_static.h"
 #include "map.h"
 #include "martialarts.h"
 #include "material.h"
@@ -574,23 +575,25 @@ item &item::ammo_set( const itype_id &ammo, int qty )
                 return *this;
             }
 
+            item mag_item( mag );
             // if default magazine too small fetch instead closest available match
-            if( mag->magazine->capacity < qty ) {
-                std::vector<itype_id> opts;
-                std::copy_if( mags.begin(), mags.end(),
-                std::back_inserter( opts ), [&ammo_type]( const itype_id & mag ) {
-                    return mag->magazine->type.count( ammo_type );
+            if( mag_item.ammo_capacity( ammo_type ) < qty ) {
+                std::vector<item> opts;
+                for( const itype_id &mag_type : mags ) {
+                    if( mag->magazine->type.count( ammo_type ) ) {
+                        opts.emplace_back( mag_type );
+                    }
+                }
+                std::sort( opts.begin(), opts.end(), [&ammo_type]( const item & lhs, const item & rhs ) {
+                    return lhs.ammo_capacity( ammo_type ) < rhs.ammo_capacity( ammo_type );
                 } );
-                std::sort( opts.begin(), opts.end(), []( const itype_id & lhs, const itype_id & rhs ) {
-                    return lhs->magazine->capacity < rhs->magazine->capacity;
-                } );
-                auto iter = std::find_if( opts.begin(), opts.end(), [&qty]( const itype_id & mag ) {
-                    return mag->magazine->capacity >= qty;
+                auto iter = std::find_if( opts.begin(), opts.end(), [&qty, &ammo_type]( const item & mag ) {
+                    return mag.ammo_capacity( ammo_type ) >= qty;
                 } );
                 if( iter != opts.end() ) {
-                    mag = *iter;
+                    mag = iter->typeId();
                 } else {
-                    mag = opts.back();
+                    mag = opts.back().typeId();
                 }
             }
             put_in( item( mag ), item_pocket::pocket_type::MAGAZINE_WELL );
@@ -678,7 +681,11 @@ bool item::is_frozen_liquid() const
 
 bool item::covers( const bodypart_id &bp ) const
 {
-    return get_covered_body_parts().test( bp.id() );
+    bool does_cover = false;
+    iterate_covered_body_parts_internal( get_side(), [&]( const bodypart_str_id & covered ) {
+        does_cover = does_cover || bp == covered;
+    } );
+    return does_cover;
 }
 
 body_part_set item::get_covered_body_parts() const
@@ -689,48 +696,68 @@ body_part_set item::get_covered_body_parts() const
 body_part_set item::get_covered_body_parts( const side s ) const
 {
     body_part_set res;
+    iterate_covered_body_parts_internal( s, [&]( const bodypart_str_id & bp ) {
+        res.set( bp );
+    } );
+    return res;
+}
+
+namespace
+{
+
+const std::array<bodypart_str_id, 4> left_side_parts{ {
+        bodypart_str_id{"arm_l"},
+        bodypart_str_id{"hand_l"},
+        bodypart_str_id{"leg_l"},
+        bodypart_str_id{"foot_l"}
+    }
+};
+
+const std::array<bodypart_str_id, 4> right_side_parts{ {
+        bodypart_str_id{"arm_r"},
+        bodypart_str_id{"hand_r"},
+        bodypart_str_id{"leg_r"},
+        bodypart_str_id{"foot_r"}
+    }
+};
+
+} // namespace
+
+void item::iterate_covered_body_parts_internal( const side s,
+        std::function<void( const bodypart_str_id & )> cb ) const
+{
 
     if( is_gun() ) {
         // Currently only used for guns with the should strap mod, other guns might
         // go on another bodypart.
-        res.set( bodypart_str_id( "torso" ) );
+        cb( STATIC( bodypart_str_id( "torso" ) ) );
     }
 
     const islot_armor *armor = find_armor_data();
     if( armor == nullptr ) {
-        return res;
+        return;
     }
+
+    // If we are querying for only one side of the body, we ignore coverage
+    // for parts on the opposite side of the body.
+    const auto &opposite_side_parts = s == side::LEFT ? right_side_parts : left_side_parts;
+
     for( const armor_portion_data &data : armor->data ) {
         if( data.covers.has_value() ) {
-            res.unify_set( data.covers.value() );
+            if( !armor->sided || s == side::BOTH || s == side::num_sides ) {
+                for( const bodypart_str_id &bpid : data.covers.value() ) {
+                    cb( bpid );
+                }
+                continue;
+            }
+            for( const bodypart_str_id &bpid : data.covers.value() ) {
+                if( std::find( opposite_side_parts.begin(), opposite_side_parts.end(),
+                               bpid ) == opposite_side_parts.end() ) {
+                    cb( bpid );
+                }
+            }
         }
     }
-
-    if( !armor->sided ) {
-        return res; // Just ignore the side.
-    }
-
-    switch( s ) {
-        case side::BOTH:
-        case side::num_sides:
-            break;
-
-        case side::LEFT:
-            res.reset( bodypart_str_id( "arm_r" ) );
-            res.reset( bodypart_str_id( "hand_r" ) );
-            res.reset( bodypart_str_id( "leg_r" ) );
-            res.reset( bodypart_str_id( "foot_r" ) );
-            break;
-
-        case side::RIGHT:
-            res.reset( bodypart_str_id( "arm_l" ) );
-            res.reset( bodypart_str_id( "hand_l" ) );
-            res.reset( bodypart_str_id( "leg_l" ) );
-            res.reset( bodypart_str_id( "foot_l" ) );
-            break;
-    }
-
-    return res;
 }
 
 bool item::is_sided() const
@@ -742,7 +769,7 @@ bool item::is_sided() const
 side item::get_side() const
 {
     // MSVC complains if directly cast double to enum
-    return static_cast<side>( static_cast<int>( get_var( "lateral",
+    return static_cast<side>( static_cast<int>( get_var( STATIC( std::string{ "lateral" } ),
                               static_cast<int>( side::BOTH ) ) ) );
 }
 
@@ -7493,7 +7520,13 @@ int item::ammo_capacity( const ammotype &ammo ) const
         return units::to_kilojoule( get_player_character().get_max_power_level() );
     }
 
-    return contents.ammo_capacity( ammo );
+    if( contents.has_pocket_type( item_pocket::pocket_type::MAGAZINE ) ) {
+        return contents.ammo_capacity( ammo );
+    }
+    if( is_magazine() ) {
+        return type->magazine->capacity;
+    }
+    return 0;
 }
 
 int item::ammo_required() const
