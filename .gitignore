@@ -59,7 +59,7 @@ Debug*/
 Release*/
 
 # Distribution script results
-/msvc-full-features/distribution
+/msvc-full-features/distribution*
 
 # Visual Studio 2015
 /msvc-full-features/*db
