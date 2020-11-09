@@ -2043,10 +2043,10 @@ int known_magic::select_spell( Character &guy )
 
     uilist spell_menu;
     spell_menu.w_height_setup = [&]() -> int {
-        return clamp( static_cast<int>( known_spells.size() ), 38, TERMY * 9 / 10 );
+        return clamp( static_cast<int>( known_spells.size() ), 38, TERMY * 9 / 5 );
     };
     const auto calc_width = []() -> int {
-        return std::max( 80, TERMX * 3 / 8 );
+        return std::max( 80, TERMX * 3 / 4 );
     };
     spell_menu.w_width_setup = calc_width;
     spell_menu.pad_right_setup = [&]() -> int {

@@ -109,7 +109,7 @@ static constexpr int MAX_AIM_COST = 10;
 static constexpr int MAX_SKILL = 20;
 
 // Maximum (effective) level for a stat.
-static constexpr int MAX_STAT = 14;
+static constexpr int MAX_STAT = 30;
 
 // Maximum range at which ranged attacks can be executed.
 static constexpr int RANGE_HARD_CAP = 60;
