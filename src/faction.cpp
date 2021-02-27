@@ -2,15 +2,18 @@
 
 #include <bitset>
 #include <cstdlib>
+#include <functional>
 #include <limits>
 #include <map>
 #include <memory>
+#include <new>
 #include <set>
 #include <string>
 #include <utility>
 
 #include "avatar.h"
 #include "basecamp.h"
+#include "catacharset.h"
 #include "character.h"
 #include "coordinates.h"
 #include "cursesdef.h"
@@ -22,6 +25,7 @@
 #include "item.h"
 #include "json.h"
 #include "line.h"
+#include "memory_fast.h"
 #include "npc.h"
 #include "optional.h"
 #include "output.h"
@@ -394,8 +398,8 @@ void faction_manager::create_if_needed()
     if( !factions.empty() ) {
         return;
     }
-    for( const auto &fac_temp : npc_factions::all_templates ) {
-        factions[fac_temp.id] = fac_temp;
+    for( const faction_template &fac_temp : npc_factions::all_templates ) {
+        factions[fac_temp.id] = faction( fac_temp );
     }
 }
 
@@ -446,7 +450,7 @@ faction *faction_manager::get( const faction_id &id, const bool complain )
     for( const faction_template &elem : npc_factions::all_templates ) {
         // id isn't already in factions map, so load in the template.
         if( elem.id == id ) {
-            factions[elem.id] = elem;
+            factions[elem.id] = faction( elem );
             if( !factions.empty() ) {
                 factions[elem.id].validated = true;
             }

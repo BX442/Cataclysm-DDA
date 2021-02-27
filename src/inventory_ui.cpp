@@ -1,5 +1,7 @@
 #include "inventory_ui.h"
 
+#include <cstdint>
+
 #include "cata_assert.h"
 #include "cata_utility.h"
 #include "catacharset.h"
@@ -11,6 +13,7 @@
 #include "inventory.h"
 #include "item.h"
 #include "item_category.h"
+#include "item_contents.h"
 #include "item_pocket.h"
 #include "item_search.h"
 #include "item_stack.h"
@@ -23,9 +26,9 @@
 #include "options.h"
 #include "output.h"
 #include "point.h"
+#include "ret_val.h"
 #include "sdltiles.h"
 #include "string_formatter.h"
-#include "string_id.h"
 #include "string_input_popup.h"
 #include "translations.h"
 #include "type_id.h"
@@ -49,6 +52,7 @@
 #include <set>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <vector>
 
 /** The maximum distance from the screen edge, to snap a window to it */
@@ -335,25 +339,9 @@ std::string inventory_selector_preset::cell_t::get_text( const inventory_entry &
 
 bool inventory_holster_preset::is_shown( const item_location &contained ) const
 {
-
-    if( holster.has_parent() ) {
-        std::function<bool( const item_location )> is_recursive_parent = [contained,
-        &is_recursive_parent]( const item_location tocheck )->bool {
-            if( tocheck.has_parent() )
-            {
-                if( tocheck.parent_item() == contained ) {
-                    return true;
-                }
-                return is_recursive_parent( tocheck.parent_item() );
-            }
-            return false;
-        };
-
-        if( is_recursive_parent( holster.parent_item() ) ) {
-            return false;
-        }
+    if( contained.eventually_contains( holster ) ) {
+        return false;
     }
-
     if( contained.where() != item_location::type::container
         && contained->made_of( phase_id::LIQUID ) ) {
         // spilt liquid cannot be picked up
@@ -785,6 +773,7 @@ void inventory_column::order_by_parent()
             }
         }
 
+        // NOLINTNEXTLINE(google-explicit-constructor)
         operator inventory_entry &&() && { // *NOPAD*
             return std::move( entry );
         }
@@ -1446,7 +1435,7 @@ void inventory_selector::add_map_items( const tripoint &target )
         const item_category map_cat( name, no_translation( name ), 100 );
 
         add_items( map_column, [ &target ]( item * it ) {
-            return item_location( target, it );
+            return item_location( map_cursor( target ), it );
         }, restack_items( items.begin(), items.end(), preset.get_checking_components() ), &map_cat );
 
         for( item &it_elem : items ) {
@@ -1668,7 +1657,7 @@ size_t inventory_selector::get_layout_height() const
 
 size_t inventory_selector::get_header_height() const
 {
-    return display_stats || !hint.empty() ? 2 : 1;
+    return display_stats || !hint.empty() ? 3 : 1;
 }
 
 size_t inventory_selector::get_header_min_width() const
@@ -1704,7 +1693,7 @@ size_t inventory_selector::get_footer_min_width() const
 void inventory_selector::draw_header( const catacurses::window &w ) const
 {
     trim_and_print( w, point( border + 1, border ), getmaxx( w ) - 2 * ( border + 1 ), c_white, title );
-    trim_and_print( w, point( border + 1, border + 1 ), getmaxx( w ) - 2 * ( border + 1 ), c_dark_gray,
+    fold_and_print( w, point( border + 1, border + 1 ), getmaxx( w ) - 2 * ( border + 1 ), c_dark_gray,
                     hint );
 
     mvwhline( w, point( border, border + get_header_height() ), LINE_OXOX, getmaxx( w ) - 2 * border );
@@ -1736,7 +1725,7 @@ inventory_selector::stats inventory_selector::get_weight_and_volume_stats(
     // This is a bit of a hack, we're prepending two entries to the weight and length stat blocks.
     std::string length_weight_caption = string_format( _( "Longest Length (%s): %s Weight (%s):" ),
                                         length_units( longest_length ),
-                                        colorize( to_string( convert_length( longest_length ) ), c_light_gray ), weight_units() );
+                                        colorize( std::to_string( convert_length( longest_length ) ), c_light_gray ), weight_units() );
     std::string volume_caption = string_format( _( "Free Volume (%s): %s Volume (%s):" ),
                                  volume_units_abbr(),
                                  colorize( format_volume( largest_free_volume ), c_light_gray ),
