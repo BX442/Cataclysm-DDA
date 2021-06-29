@@ -768,6 +768,7 @@ bool item_pocket::process( const itype &type, player *carrier, const tripoint &p
             spoil_multiplier = 0.0f;
         }
         if( it->process( carrier, pos, type.insulation_factor * insulation, flag, spoil_multiplier ) ) {
+            it->spill_contents( pos );
             it = contents.erase( it );
             processed = true;
         } else {
@@ -1332,6 +1333,7 @@ void item_pocket::process( player *carrier, const tripoint &pos, float insulatio
         if( iter->process( carrier, pos, insulation, flag,
                            // spoil multipliers on pockets are not additive or multiplicative, they choose the best
                            std::min( spoil_multiplier_parent, spoil_multiplier() ) ) ) {
+            iter->spill_contents( pos );
             iter = contents.erase( iter );
         } else {
             ++iter;
@@ -1601,6 +1603,28 @@ void item_pocket::favorite_settings::clear_item( const itype_id &id )
 {
     item_whitelist.erase( id );
     item_blacklist.erase( id );
+}
+
+const cata::flat_set<itype_id> &item_pocket::favorite_settings::get_item_whitelist() const
+{
+    return item_whitelist;
+}
+
+const cata::flat_set<itype_id> &item_pocket::favorite_settings::get_item_blacklist() const
+{
+    return item_blacklist;
+}
+
+const cata::flat_set<item_category_id> &
+item_pocket::favorite_settings::get_category_whitelist() const
+{
+    return category_whitelist;
+}
+
+const cata::flat_set<item_category_id> &
+item_pocket::favorite_settings::get_category_blacklist() const
+{
+    return category_blacklist;
 }
 
 void item_pocket::favorite_settings::whitelist_category( const item_category_id &id )
