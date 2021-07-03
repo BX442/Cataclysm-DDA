@@ -1695,6 +1695,17 @@ static bool consume_med( item &target, player &you )
     return true;
 }
 
+static bool cbm_is_full( const player &guy, const item &fuel )
+{
+    material_id fuel_mat;
+    if( fuel.is_magazine() ) {
+        fuel_mat = item( fuel.ammo_current() ).get_base_material().id;
+    } else {
+        fuel_mat = fuel.get_base_material().id;
+    }
+    return guy.get_fuel_capacity( fuel_mat ) > 0;
+}
+
 trinary player::consume( item &target, bool force )
 {
     if( target.is_null() ) {
@@ -1717,8 +1728,9 @@ trinary player::consume( item &target, bool force )
         return trinary::NONE;
     }
     if( consume_med( target, *this ) ||
-        eat( target, *this, force ) ||
-        fuel_bionic_with( target ) ) {
+        ( has_max_power() && get_power_level() < get_max_power_level() &&
+          cbm_is_full( *this, target ) && fuel_bionic_with( target ) ) ||
+        eat( target, *this, force ) ) {
 
         get_event_bus().send<event_type::character_consumes_item>( getID(), target.typeId() );
 
