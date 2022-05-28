@@ -64,7 +64,7 @@ static constexpr int MM_REG_SIZE = 8;
  * Items on the map with at most this distance to the player are considered available for crafting,
  * see inventory::form_from_map
 */
-static constexpr int PICKUP_RANGE = 6;
+static constexpr int PICKUP_RANGE = 10;
 
 // Number of z-levels below 0 (not including 0).
 static constexpr int OVERMAP_DEPTH = 10;
@@ -83,7 +83,7 @@ static constexpr int MAP_HANDLING_PENALTY = 80;
 static constexpr int VEHICLE_HANDLING_PENALTY = 80;
 
 // Amount by which to charge an item for each unit of plutonium cell.
-static constexpr int PLUTONIUM_CHARGES = 500;
+static constexpr int PLUTONIUM_CHARGES = 50000;
 
 // Temperature constants.
 namespace temperatures
@@ -114,10 +114,10 @@ constexpr int boiling = 212; // 100 Celsius
 static constexpr int MAX_AIM_COST = 10;
 
 // Maximum (effective) level for a skill.
-static constexpr int MAX_SKILL = 10;
+static constexpr int MAX_SKILL = 20;
 
 // Maximum (effective) level for a stat.
-static constexpr int MAX_STAT = 14;
+static constexpr int MAX_STAT = 30;
 
 // Maximum range at which ranged attacks can be executed.
 static constexpr int RANGE_HARD_CAP = 60;

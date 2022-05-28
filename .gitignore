@@ -68,6 +68,10 @@ json_formatter
 CMakeUserPresets.json
 out/
 
+# Distribution script results
+/msvc-full-features/distribution*
+
+
 # Visual Studio 2015
 /msvc-full-features/*db
 /msvc-full-features/ipch
