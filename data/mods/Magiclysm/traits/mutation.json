@@ -20,6 +20,7 @@
     "cancels": [ "MANA_SUB1", "MANA_SUB2", "MANA_SUB3" ],
     "changes_to": [ "MANA_ADD2" ],
     "types": [ "MANA_ADD" ],
+    "category": [ "DRAGON_BLACK", "MANATOUCHED" ],
     "starting_trait": true,
     "flags": [ "NON_THRESH" ],
     "mana_modifier": 500
@@ -33,6 +34,7 @@
     "cancels": [ "MANA_SUB1", "MANA_SUB2", "MANA_SUB3" ],
     "changes_to": [ "MANA_ADD3" ],
     "types": [ "MANA_ADD" ],
+    "category": [ "DRAGON_BLACK", "MANATOUCHED" ],
     "starting_trait": true,
     "prereqs": [ "MANA_ADD1" ],
     "flags": [ "NON_THRESH" ],
@@ -46,6 +48,7 @@
     "description": "You are able to store a lot more mana in your body than usual.",
     "cancels": [ "MANA_SUB1", "MANA_SUB2", "MANA_SUB3" ],
     "types": [ "MANA_ADD" ],
+    "category": [ "DRAGON_BLACK", "MANATOUCHED" ],
     "changes_to": [ "MANA_ADD_MANATOUCHED" ],
     "prereqs": [ "MANA_ADD2" ],
     "flags": [ "NON_THRESH" ],
@@ -97,7 +100,7 @@
     "cancels": [ "BAD_MANA_REGEN1", "BAD_MANA_REGEN2", "BAD_MANA_REGEN3" ],
     "changes_to": [ "MANA_REGEN2" ],
     "types": [ "MANA_REGEN" ],
-    "category": [ "FISH", "ELFA", "ALPHA", "PLANT", "CEPHALOPOD" ],
+    "category": [ "FISH", "ELFA", "ALPHA", "PLANT", "CEPHALOPOD", "MANATOUCHED", "DRAGON_BLACK" ],
     "starting_trait": true,
     "flags": [ "NON_THRESH" ],
     "mana_regen_multiplier": 1.1
@@ -112,7 +115,7 @@
     "cancels": [ "BAD_MANA_REGEN1", "BAD_MANA_REGEN2", "BAD_MANA_REGEN3" ],
     "changes_to": [ "MANA_REGEN3", "MANA_REGEN_MANATOUCHED" ],
     "types": [ "MANA_REGEN" ],
-    "category": [ "FISH", "ELFA", "PLANT", "MANATOUCHED" ],
+    "category": [ "FISH", "ELFA", "PLANT", "MANATOUCHED", "DRAGON_BLACK" ],
     "starting_trait": true,
     "flags": [ "NON_THRESH" ],
     "mana_regen_multiplier": 1.25
@@ -126,8 +129,8 @@
     "prereqs": [ "MANA_REGEN2" ],
     "cancels": [ "BAD_MANA_REGEN1", "BAD_MANA_REGEN2", "BAD_MANA_REGEN3" ],
     "types": [ "MANA_REGEN" ],
-    "threshreq": [ "THRESH_PLANT", "THRESH_MANA" ],
-    "category": [ "PLANT" ],
+    "threshreq": [ "THRESH_PLANT", "THRESH_MANA", "THRESH_DRAGON_BLACK" ],
+    "category": [ "PLANT", "DRAGON_BLACK" ],
     "flags": [ "NON_THRESH" ],
     "mana_regen_multiplier": 1.5
   },
@@ -181,7 +184,20 @@
     "cancels": [ "BAD_MANA_MULT1", "BAD_MANA_MULT2", "BAD_MANA_MULT3" ],
     "changes_to": [ "MANA_MULT2" ],
     "types": [ "MANA_MULT" ],
-    "category": [ "BIRD", "LIZARD", "SLIME", "FELINE", "CATTLE", "URSINE", "PLANT", "CEPHALOPOD", "ALPHA", "ELFA" ],
+    "category": [
+      "BIRD",
+      "LIZARD",
+      "SLIME",
+      "FELINE",
+      "CATTLE",
+      "URSINE",
+      "PLANT",
+      "CEPHALOPOD",
+      "ALPHA",
+      "ELFA",
+      "MANATOUCHED",
+      "DRAGON_BLACK"
+    ],
     "starting_trait": true,
     "flags": [ "NON_THRESH" ],
     "mana_multiplier": 1.25
@@ -195,7 +211,7 @@
     "cancels": [ "BAD_MANA_MULT1", "BAD_MANA_MULT2", "BAD_MANA_MULT3" ],
     "changes_to": [ "MANA_MULT3" ],
     "types": [ "MANA_MULT" ],
-    "category": [ "BIRD", "SLIME", "CATTLE", "PLANT", "CEPHALOPOD", "ELFA" ],
+    "category": [ "BIRD", "SLIME", "CATTLE", "PLANT", "CEPHALOPOD", "ELFA", "MANATOUCHED", "DRAGON_BLACK" ],
     "prereqs": [ "MANA_MULT1" ],
     "starting_trait": true,
     "flags": [ "NON_THRESH" ],
@@ -210,7 +226,7 @@
     "cancels": [ "BAD_MANA_MULT1", "BAD_MANA_MULT2", "BAD_MANA_MULT3" ],
     "types": [ "MANA_MULT" ],
     "changes_to": [ "MANA_MULT_MANATOUCHED" ],
-    "category": [ "SLIME", "CATTLE", "CEPHALOPOD" ],
+    "category": [ "SLIME", "CATTLE", "CEPHALOPOD", "MANATOUCHED", "DRAGON_BLACK" ],
     "prereqs": [ "MANA_MULT2" ],
     "flags": [ "NON_THRESH" ],
     "mana_multiplier": 2.5
@@ -312,5 +328,15 @@
     "description": "You are deer-like, giving you the ability to move quickly and escape danger.  However, this takes a great toll on your body, and you don't think you should maintain this form for long.",
     "encumbrance_always": [ [ "hand_r", 50 ], [ "hand_l", 50 ], [ "arm_r", 50 ], [ "arm_l", 50 ] ],
     "healing_awake": -500.0
+  },
+  {
+    "type": "mutation",
+    "id": "MIRROR_DISPLACEMENT",
+    "name": { "str": "Mirror Displacement" },
+    "points": 9,
+    "description": "You aren't where you seem to be.",
+    "starting_trait": false,
+    "category": [ "CHIMERA" ],
+    "flags": [ "UNCANNY_DODGE" ]
   }
 ]

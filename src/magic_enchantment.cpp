@@ -72,6 +72,7 @@ namespace io
             case enchant_vals::mod::FATIGUE: return "FATIGUE";
             case enchant_vals::mod::PAIN: return "PAIN";
             case enchant_vals::mod::BONUS_DAMAGE: return "BONUS_DAMAGE";
+            case enchant_vals::mod::MELEE_DAMAGE: return "MELEE_DAMAGE";
             case enchant_vals::mod::BONUS_BLOCK: return "BONUS_BLOCK";
             case enchant_vals::mod::BONUS_DODGE: return "BONUS_DODGE";
             case enchant_vals::mod::ATTACK_NOISE: return "ATTACK_NOISE";
@@ -92,6 +93,7 @@ namespace io
             case enchant_vals::mod::READING_EXP: return "READING_EXP";
             case enchant_vals::mod::SKILL_RUST_RESIST: return "SKILL_RUST_RESIST";
             case enchant_vals::mod::LEARNING_FOCUS: return "LEARNING_FOCUS";
+            case enchant_vals::mod::RECOIL_MODIFIER: return "RECOIL_MODIFIER";
             case enchant_vals::mod::ARMOR_ACID: return "ARMOR_ACID";
             case enchant_vals::mod::ARMOR_BASH: return "ARMOR_BASH";
             case enchant_vals::mod::ARMOR_BIO: return "ARMOR_BIO";
@@ -101,6 +103,15 @@ namespace io
             case enchant_vals::mod::ARMOR_HEAT: return "ARMOR_HEAT";
             case enchant_vals::mod::ARMOR_STAB: return "ARMOR_STAB";
             case enchant_vals::mod::ARMOR_BULLET: return "ARMOR_BULLET";
+            case enchant_vals::mod::EXTRA_BASH: return "EXTRA_BASH";
+            case enchant_vals::mod::EXTRA_CUT: return "EXTRA_CUT";
+            case enchant_vals::mod::EXTRA_STAB: return "EXTRA_STAB";
+            case enchant_vals::mod::EXTRA_BULLET: return "EXTRA_BULLET";
+            case enchant_vals::mod::EXTRA_HEAT: return "EXTRA_HEAT";
+            case enchant_vals::mod::EXTRA_COLD: return "EXTRA_COLD";
+            case enchant_vals::mod::EXTRA_ELEC: return "EXTRA_ELEC";
+            case enchant_vals::mod::EXTRA_ACID: return "EXTRA_ACID";
+            case enchant_vals::mod::EXTRA_BIO: return "EXTRA_BIO";
             case enchant_vals::mod::ITEM_DAMAGE_PURE: return "ITEM_DAMAGE_PURE";
             case enchant_vals::mod::ITEM_DAMAGE_BASH: return "ITEM_DAMAGE_BASH";
             case enchant_vals::mod::ITEM_DAMAGE_CUT: return "ITEM_DAMAGE_CUT";

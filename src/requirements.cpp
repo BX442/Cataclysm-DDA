@@ -25,6 +25,7 @@
 #include "item_factory.h"
 #include "itype.h"
 #include "json.h"
+#include "localized_comparator.h"
 #include "make_static.h"
 #include "output.h"
 #include "point.h"
@@ -33,6 +34,7 @@
 #include "value_ptr.h"
 #include "visitable.h"
 
+static const itype_id itype_UPS( "UPS" );
 static const itype_id itype_char_forge( "char_forge" );
 static const itype_id itype_crucible( "crucible" );
 static const itype_id itype_fire( "fire" );
@@ -41,11 +43,18 @@ static const itype_id itype_mold_plastic( "mold_plastic" );
 static const itype_id itype_oxy_torch( "oxy_torch" );
 static const itype_id itype_press( "press" );
 static const itype_id itype_sewing_kit( "sewing_kit" );
-static const itype_id itype_UPS( "UPS" );
 static const itype_id itype_welder( "welder" );
 static const itype_id itype_welder_crude( "welder_crude" );
 
+static const quality_id qual_CUT( "CUT" );
+static const quality_id qual_GLARE( "GLARE" );
+static const quality_id qual_KNIT( "KNIT" );
+static const quality_id qual_PULL( "PULL" );
+static const quality_id qual_SAW_M_FINE( "SAW_M_FINE" );
+static const quality_id qual_SEW( "SEW" );
+
 static const trait_id trait_DEBUG_HS( "DEBUG_HS" );
+
 
 static std::map<requirement_id, requirement_data> requirements_all;
 
@@ -164,30 +173,35 @@ std::string item_comp::to_string( const int batch, const int avail ) const
     const int c = std::abs( count ) * batch;
     const itype *type_ptr = item::find_type( type );
     if( type_ptr->count_by_charges() ) {
+        // Count-by-charge
+
         if( avail == item::INFINITE_CHARGES ) {
             //~ %1$s: item name, %2$d: charge requirement
-            return string_format( npgettext( "requirement", "%1$s (%2$d of infinite)",
-                                             "%1$s (%2$d of infinite)",
+            return string_format( npgettext( "requirement", "%2$d %1$s (have infinite)",
+                                             "%2$d %1$s (have infinite)",
                                              c ),
                                   type_ptr->nname( 1 ), c );
         } else if( avail > 0 ) {
             //~ %1$s: item name, %2$d: charge requirement, %3%d: available charges
-            return string_format( npgettext( "requirement", "%1$s (%2$d of %3$d)", "%1$s (%2$d of %3$d)", c ),
+            return string_format( npgettext( "requirement", "%2$d %1$s (have %3$d)",
+                                             "%2$d %1$s (have %3$d)", c ),
                                   type_ptr->nname( 1 ), c, avail );
         } else {
             //~ %1$s: item name, %2$d: charge requirement
-            return string_format( npgettext( "requirement", "%1$s (%2$d)", "%1$s (%2$d)", c ),
+            return string_format( npgettext( "requirement", "%2$d %1$s", "%2$d %1$s", c ),
                                   type_ptr->nname( 1 ), c );
         }
     } else {
         if( avail == item::INFINITE_CHARGES ) {
             //~ %1$s: item name, %2$d: required count
-            return string_format( npgettext( "requirement", "%2$d %1$s of infinite", "%2$d %1$s of infinite",
+            return string_format( npgettext( "requirement", "%2$d %1$s (have infinite)",
+                                             "%2$d %1$s (have infinite)",
                                              c ),
                                   type_ptr->nname( c ), c );
         } else if( avail > 0 ) {
             //~ %1$s: item name, %2$d: required count, %3%d: available count
-            return string_format( npgettext( "requirement", "%2$d %1$s of %3$d", "%2$d %1$s of %3$d", c ),
+            return string_format( npgettext( "requirement", "%2$d %1$s (have %3$d)",
+                                             "%2$d %1$s (have %3$d)", c ),
                                   type_ptr->nname( c ), c, avail );
         } else {
             //~ %1$s: item name, %2$d: required count
@@ -410,13 +424,34 @@ requirement_data requirement_data::operator+( const std::pair<requirement_id, in
     return *this + *rhs.first * rhs.second;
 }
 
-void requirement_data::load_requirement( const JsonObject &jsobj, const requirement_id &id )
+void requirement_data::load_requirement( const JsonObject &jsobj, const requirement_id &id,
+        const bool check_extend )
 {
     requirement_data req;
+    requirement_data ext;
 
-    load_obj_list( jsobj.get_array( "components" ), req.components );
-    load_obj_list( jsobj.get_array( "qualities" ), req.qualities );
-    load_obj_list( jsobj.get_array( "tools" ), req.tools );
+    if( check_extend && jsobj.has_object( "extend" ) ) {
+        JsonObject jext = jsobj.get_object( "extend" );
+        if( jext.has_member( "components" ) ) {
+            load_obj_list( jext.get_array( "components" ), ext.components );
+        }
+        if( jext.has_member( "qualities" ) ) {
+            load_obj_list( jext.get_array( "qualities" ), ext.qualities );
+        }
+        if( jext.has_member( "tools" ) ) {
+            load_obj_list( jext.get_array( "tools" ), ext.tools );
+        }
+    }
+
+    if( ext.components.empty() || jsobj.has_member( "components" ) ) {
+        load_obj_list( jsobj.get_array( "components" ), req.components );
+    }
+    if( ext.qualities.empty() || jsobj.has_member( "qualities" ) ) {
+        load_obj_list( jsobj.get_array( "qualities" ), req.qualities );
+    }
+    if( ext.tools.empty() || jsobj.has_member( "tools" ) ) {
+        load_obj_list( jsobj.get_array( "tools" ), req.tools );
+    }
 
     if( !id.is_null() ) {
         req.id_ = id;
@@ -426,17 +461,48 @@ void requirement_data::load_requirement( const JsonObject &jsobj, const requirem
         jsobj.throw_error( "id was not specified for requirement" );
     }
 
-    save_requirement( req );
+    save_requirement( req, string_id<requirement_data>::NULL_ID(), &ext );
 }
 
-void requirement_data::save_requirement( const requirement_data &req, const requirement_id &id )
+void requirement_data::save_requirement( const requirement_data &req, const requirement_id &id,
+        const requirement_data *extend )
 {
     requirement_data dup = req;
     if( !id.is_null() ) {
         dup.id_ = id;
     }
 
-    requirements_all[ dup.id_ ] = dup;
+    if( requirements_all.count( dup.id_ ) == 0 ) {
+        requirements_all[ dup.id_ ] = dup;
+    }
+
+    requirement_data &r = requirements_all[ dup.id_ ];
+    if( !dup.components.empty() ) {
+        r.components.clear();
+        r.components.insert( r.components.end(), dup.components.begin(), dup.components.end() );
+    }
+    if( !dup.tools.empty() ) {
+        r.tools.clear();
+        r.tools.insert( r.tools.end(), dup.tools.begin(), dup.tools.end() );
+    }
+    if( !dup.qualities.empty() ) {
+        r.qualities.clear();
+        r.qualities.insert( r.qualities.end(), dup.qualities.begin(), dup.qualities.end() );
+    }
+
+    if( !!extend ) {
+        for( unsigned i = 0; i < r.components.size() && i < extend->components.size(); i++ ) {
+            r.components[i].insert( r.components[i].end(), extend->components[i].begin(),
+                                    extend->components[i].end() );
+        }
+        for( unsigned i = 0; i < r.tools.size() && i < extend->tools.size(); i++ ) {
+            r.tools[i].insert( r.tools[i].end(), extend->tools[i].begin(), extend->tools[i].end() );
+        }
+        for( unsigned i = 0; i < r.qualities.size() && i < extend->qualities.size(); i++ ) {
+            r.qualities[i].insert( r.qualities[i].end(), extend->qualities[i].begin(),
+                                   extend->qualities[i].end() );
+        }
+    }
 }
 
 template<typename T>
@@ -924,6 +990,20 @@ nc_color item_comp::get_color( bool has_one, const read_only_visitable &crafting
     if( available == available_status::a_insufficient ) {
         return c_brown;
     } else if( has( crafting_inv, filter, batch ) ) {
+        const inventory *inv = static_cast<const inventory *>( &crafting_inv );
+        // Will use non-empty liquid container
+        if( std::any_of( type->pockets.begin(), type->pockets.end(), []( const pocket_data & d ) {
+        return d.type == item_pocket::pocket_type::CONTAINER && d.watertight;
+    } ) && inv != nullptr && inv->must_use_liq_container( type, count * batch ) ) {
+            return c_magenta;
+        }
+        // Will use favorited component
+        if( !has( crafting_inv, [&filter]( const item & it ) {
+        return filter( it ) && !it.is_favorite;
+        }, batch ) ) {
+            return c_pink;
+        }
+        // Component is OK
         return c_green;
     }
     return has_one ? c_dark_gray  : c_red;
@@ -1108,14 +1188,14 @@ requirement_data requirement_data::disassembly_requirements() const
             // If crafting required a welder or forge then disassembly requires metal sawing
             if( type == itype_welder || type == itype_welder_crude || type == itype_oxy_torch ||
                 type == itype_forge || type == itype_char_forge ) {
-                new_qualities.emplace_back( quality_id( "SAW_M_FINE" ), 1, 1 );
+                new_qualities.emplace_back( qual_SAW_M_FINE, 1, 1 );
                 replaced = true;
                 break;
             }
             //This only catches instances where the two tools are explicitly stated, and not just the required sewing quality
             if( type == itype_sewing_kit ||
                 type == itype_mold_plastic ) {
-                new_qualities.emplace_back( quality_id( "CUT" ), 1, 1 );
+                new_qualities.emplace_back( qual_CUT, 1, 1 );
                 replaced = true;
                 break;
             }
@@ -1128,7 +1208,7 @@ requirement_data requirement_data::disassembly_requirements() const
             if( type == itype_press ) {
                 replaced = true;
                 remove_fire = true;
-                new_qualities.emplace_back( quality_id( "PULL" ), 1, 1 );
+                new_qualities.emplace_back( qual_PULL, 1, 1 );
                 break;
             }
             if( type == itype_fire && remove_fire ) {
@@ -1155,19 +1235,19 @@ requirement_data requirement_data::disassembly_requirements() const
         for( auto &it : ret.qualities ) {
             bool replaced = false;
             for( const auto &quality : it ) {
-                if( quality.type == quality_id( "SEW" ) ) {
+                if( quality.type == qual_SEW ) {
                     replaced = true;
-                    new_qualities.emplace_back( quality_id( "CUT" ), 1, quality.level );
+                    new_qualities.emplace_back( qual_CUT, 1, quality.level );
                     break;
                 }
-                if( quality.type == quality_id( "GLARE" ) ) {
+                if( quality.type == qual_GLARE ) {
                     replaced = true;
                     //Just remove the glare protection requirement from deconstruction
                     //This only happens in case of a reversible recipe, an explicit
                     //deconstruction recipe can still specify glare protection
                     break;
                 }
-                if( quality.type == quality_id( "KNIT" ) ) {
+                if( quality.type == qual_KNIT ) {
                     replaced = true;
                     //Ditto for knitting needles
                     break;

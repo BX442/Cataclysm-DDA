@@ -42,6 +42,13 @@
   },
   {
     "type": "SPECIES",
+    "id": "KRAKEN",
+    "description": "a squid-like mutant",
+    "fear_triggers": [ "HURT", "FRIEND_ATTACKED" ],
+    "bleeds": "fd_blood"
+  },
+  {
+    "type": "SPECIES",
     "id": "MUTANT",
     "description": "a mutant"
   },
@@ -49,6 +56,12 @@
     "type": "SPECIES",
     "id": "NETHER",
     "description": "a nether creature",
+    "fear_triggers": [ "HURT" ]
+  },
+  {
+    "type": "SPECIES",
+    "id": "MIGO",
+    "description": "a creature from the mi-go homeworld",
     "fear_triggers": [ "HURT" ]
   },
   {

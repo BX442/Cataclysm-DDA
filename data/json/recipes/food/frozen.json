@@ -12,7 +12,13 @@
     "qualities": [ { "id": "COOK", "level": 3 } ],
     "tools": [ [ [ "rock_quern", -1 ], [ "clay_quern", -1 ], [ "mortar_pestle", -1 ], [ "food_processor", 10 ] ] ],
     "components": [
-      [ [ "milk_standard", 1, "LIST" ], [ "con_milk", 1 ], [ "can_coconut", 1 ] ],
+      [
+        [ "milk_standard", 1, "LIST" ],
+        [ "lf_milk_standard", 1, "LIST" ],
+        [ "milk_powder", 1 ],
+        [ "con_milk", 1 ],
+        [ "can_coconut", 1 ]
+      ],
       [
         [ "chocolate", 1 ],
         [ "peanutbutter", 2 ],
@@ -80,7 +86,7 @@
     "autolearn": true,
     "tools": [ [ [ "rock_quern", -1 ], [ "clay_quern", -1 ], [ "mortar_pestle", -1 ], [ "food_processor", 10 ] ] ],
     "components": [
-      [ [ "milk_standard", 1, "LIST" ] ],
+      [ [ "milk_standard", 1, "LIST" ], [ "lf_milk_standard", 1, "LIST" ], [ "milk_powder", 1 ], [ "con_milk", 1 ] ],
       [
         [ "chocolate", 2 ],
         [ "peanutbutter", 2 ],
@@ -234,6 +240,7 @@
     "subcategory": "CSC_FOOD_OTHER",
     "skill_used": "cooking",
     "time": "20 m",
+    "tools": [ [ [ "bag_plastic", 2 ] ] ],
     "book_learn": [ [ "mag_cooking", 0 ] ],
     "components": [
       [ [ "water_clean", 2 ] ],
@@ -258,8 +265,7 @@
         [ "irradiated_blackberries", 1 ]
       ],
       [ [ "sugar", 20 ], [ "artificial_sweetener", 20 ] ],
-      [ [ "salt", 30 ] ],
-      [ [ "bag_plastic", 2 ] ]
+      [ [ "salt", 5 ] ]
     ]
   },
   {
@@ -268,6 +274,7 @@
     "//": "in real life, you can use some plastic bags with the correct materials and shake up to make ice cream!",
     "copy-from": "icecream_from_bags",
     "type": "recipe",
+    "tools": [ [ [ "bag_plastic", 2 ] ] ],
     "book_learn": [ [ "mag_cooking", 0 ] ],
     "components": [
       [ [ "water_clean", 2 ] ],
@@ -292,8 +299,7 @@
         [ "irradiated_blackberries", 1 ]
       ],
       [ [ "sugar", 20 ], [ "artificial_sweetener", 20 ] ],
-      [ [ "salt", 30 ] ],
-      [ [ "bag_plastic", 2 ] ]
+      [ [ "salt", 5 ] ]
     ]
   },
   {
@@ -335,7 +341,7 @@
     "qualities": [ { "id": "COOK", "level": 3 } ],
     "tools": [ [ [ "rock_quern", -1 ], [ "clay_quern", -1 ], [ "mortar_pestle", -1 ], [ "food_processor", 10 ] ] ],
     "components": [
-      [ [ "milk_standard", 2, "LIST" ] ],
+      [ [ "milk_standard", 2, "LIST" ], [ "lf_milk_standard", 2, "LIST" ] ],
       [
         [ "chocolate", 1 ],
         [ "peanutbutter", 1 ],
@@ -398,7 +404,7 @@
     "subcategory": "CSC_FOOD_OTHER",
     "skill_used": "cooking",
     "difficulty": 2,
-    "time": "20 m",
+    "time": "25 m",
     "book_learn": [ [ "cookbook_italian", 1 ] ],
     "qualities": [ { "id": "COOK", "level": 3 } ],
     "tools": [ [ [ "rock_quern", -1 ], [ "clay_quern", -1 ], [ "mortar_pestle", -1 ], [ "food_processor", 10 ] ] ],

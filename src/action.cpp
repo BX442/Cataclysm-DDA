@@ -41,6 +41,8 @@
 #include "vehicle.h"
 #include "vpart_position.h"
 
+static const itype_id itype_swim_fins( "swim_fins" );
+
 static const quality_id qual_BUTCHER( "BUTCHER" );
 static const quality_id qual_CUT_FINE( "CUT_FINE" );
 
@@ -175,12 +177,14 @@ std::string action_ident( action_id act )
             return "smash";
         case ACTION_EXAMINE:
             return "examine";
+        case ACTION_EXAMINE_AND_PICKUP:
+            return "examine_and_pickup";
         case ACTION_ADVANCEDINV:
             return "advinv";
         case ACTION_PICKUP:
             return "pickup";
-        case ACTION_PICKUP_FEET:
-            return "pickup_feet";
+        case ACTION_PICKUP_ALL:
+            return "pickup_all";
         case ACTION_GRAB:
             return "grab";
         case ACTION_HAUL:
@@ -243,6 +247,8 @@ std::string action_ident( action_id act )
             return "cast_spell";
         case ACTION_SELECT_FIRE_MODE:
             return "select_fire_mode";
+        case ACTION_UNLOAD_CONTAINER:
+            return "unload_container";
         case ACTION_DROP:
             return "drop";
         case ACTION_DIR_DROP:
@@ -303,6 +309,10 @@ std::string action_ident( action_id act )
             return "factions";
         case ACTION_SCORES:
             return "scores";
+        case ACTION_MEDICAL:
+            return "medical";
+        case ACTION_BODYSTATUS:
+            return "bodystatus";
         case ACTION_MORALE:
             return "morale";
         case ACTION_MESSAGES:
@@ -371,6 +381,8 @@ std::string action_ident( action_id act )
             return "autoattack";
         case ACTION_MAIN_MENU:
             return "main_menu";
+        case ACTION_DIARY:
+            return "diary";
         case ACTION_KEYBINDINGS:
             return "HELP_KEYBINDINGS";
         case ACTION_OPTIONS:
@@ -423,6 +435,8 @@ bool can_action_change_worldstate( const action_id act )
         case ACTION_SCORES:
         case ACTION_FACTIONS:
         case ACTION_MORALE:
+        case ACTION_MEDICAL:
+        case ACTION_BODYSTATUS:
         case ACTION_MESSAGES:
         case ACTION_HELP:
         case ACTION_MAIN_MENU:
@@ -625,7 +639,7 @@ bool can_move_vertical_at( const tripoint &p, int movez )
             return !player_character.is_underwater() && !player_character.worn_with_flag( flag_FLOTATION );
         } else {
             return player_character.swim_speed() < 500 ||
-                   player_character.is_wearing( itype_id( "swim_fins" ) );
+                   player_character.is_wearing( itype_swim_fins );
         }
     }
 
@@ -636,7 +650,7 @@ bool can_move_vertical_at( const tripoint &p, int movez )
     }
 }
 
-bool can_examine_at( const tripoint &p )
+bool can_examine_at( const tripoint &p, bool with_pickup )
 {
     map &here = get_map();
     if( here.veh_at( p ) ) {
@@ -645,7 +659,7 @@ bool can_examine_at( const tripoint &p )
     if( here.has_flag( ter_furn_flag::TFLAG_CONSOLE, p ) ) {
         return true;
     }
-    if( !here.has_flag( ter_furn_flag::TFLAG_SEALED, p ) && here.has_items( p ) ) {
+    if( with_pickup && !here.has_flag( ter_furn_flag::TFLAG_SEALED, p ) && here.has_items( p ) ) {
         return true;
     }
     const furn_t &xfurn_t = here.furn( p ).obj();
@@ -684,7 +698,7 @@ bool can_interact_at( action_id action, const tripoint &p )
     tripoint player_pos = get_player_character().pos();
     switch( action ) {
         case ACTION_OPEN:
-            return here.open_door( p, !here.is_outside( player_pos ), true );
+            return here.open_door( get_avatar(), p, !here.is_outside( player_pos ), true );
         case ACTION_CLOSE: {
             const optional_vpart_position vp = here.veh_at( p );
             return ( vp &&
@@ -699,9 +713,10 @@ bool can_interact_at( action_id action, const tripoint &p )
         case ACTION_MOVE_DOWN:
             return can_move_vertical_at( p, -1 );
         case ACTION_EXAMINE:
-            return can_examine_at( p );
+            return can_examine_at( p, false );
+        case ACTION_EXAMINE_AND_PICKUP:
+            return can_examine_at( p, true );
         case ACTION_PICKUP:
-        case ACTION_PICKUP_FEET:
             return can_pickup_at( p );
         default:
             return false;
@@ -851,6 +866,7 @@ action_id handle_action_menu()
             // Everything below here can be accessed through
             // the inventory screen, so it's sorted to the
             // end of the list.
+            REGISTER_ACTION( ACTION_UNLOAD_CONTAINER );
             REGISTER_ACTION( ACTION_DROP );
             REGISTER_ACTION( ACTION_COMPARE );
             REGISTER_ACTION( ACTION_ORGANIZE );
@@ -889,6 +905,7 @@ action_id handle_action_menu()
             REGISTER_ACTION( ACTION_TOGGLE_DEBUG_MODE );
         } else if( category == _( "Interact" ) ) {
             REGISTER_ACTION( ACTION_EXAMINE );
+            REGISTER_ACTION( ACTION_EXAMINE_AND_PICKUP );
             REGISTER_ACTION( ACTION_SMASH );
             REGISTER_ACTION( ACTION_MOVE_DOWN );
             REGISTER_ACTION( ACTION_MOVE_UP );
@@ -896,7 +913,7 @@ action_id handle_action_menu()
             REGISTER_ACTION( ACTION_CLOSE );
             REGISTER_ACTION( ACTION_CHAT );
             REGISTER_ACTION( ACTION_PICKUP );
-            REGISTER_ACTION( ACTION_PICKUP_FEET );
+            REGISTER_ACTION( ACTION_PICKUP_ALL );
             REGISTER_ACTION( ACTION_GRAB );
             REGISTER_ACTION( ACTION_HAUL );
             REGISTER_ACTION( ACTION_BUTCHER );
@@ -936,7 +953,10 @@ action_id handle_action_menu()
             REGISTER_ACTION( ACTION_SCORES );
             REGISTER_ACTION( ACTION_FACTIONS );
             REGISTER_ACTION( ACTION_MORALE );
+            REGISTER_ACTION( ACTION_MEDICAL );
+            REGISTER_ACTION( ACTION_BODYSTATUS );
             REGISTER_ACTION( ACTION_MESSAGES );
+            REGISTER_ACTION( ACTION_DIARY );
         } else if( category == _( "Misc" ) ) {
             REGISTER_ACTION( ACTION_WAIT );
             REGISTER_ACTION( ACTION_SLEEP );
@@ -963,8 +983,7 @@ action_id handle_action_menu()
 
         std::string title = _( "Actions" );
         if( category != "back" ) {
-            catgname = category;
-            capitalize_letter( catgname, 0 );
+            catgname = uppercase_first_letter( category );
             title += ": " + catgname;
         }
 
@@ -1004,7 +1023,11 @@ action_id handle_main_menu()
     };
 
     REGISTER_ACTION( ACTION_HELP );
-    REGISTER_ACTION( ACTION_KEYBINDINGS );
+
+    // The hotkey is reserved for the uilist keybindings menu
+    entries.emplace_back( ACTION_KEYBINDINGS, true, cata::nullopt,
+                          ctxt.get_action_name( action_ident( ACTION_KEYBINDINGS ) ) );
+
     REGISTER_ACTION( ACTION_OPTIONS );
     REGISTER_ACTION( ACTION_AUTOPICKUP );
     REGISTER_ACTION( ACTION_AUTONOTES );

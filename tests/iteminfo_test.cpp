@@ -23,6 +23,32 @@
 #include "units.h"
 #include "value_ptr.h"
 
+static const itype_id itype_candle_wax( "candle_wax" );
+static const itype_id itype_dress_shirt( "dress_shirt" );
+static const itype_id itype_match( "match" );
+static const itype_id itype_test_armor_chitin( "test_armor_chitin" );
+static const itype_id itype_test_armor_chitin_copy( "test_armor_chitin_copy" );
+static const itype_id itype_test_armor_chitin_copy_prop( "test_armor_chitin_copy_prop" );
+static const itype_id itype_test_armor_chitin_copy_rel( "test_armor_chitin_copy_rel" );
+static const itype_id itype_test_armor_chitin_copy_w_armor( "test_armor_chitin_copy_w_armor" );
+static const itype_id
+itype_test_armor_chitin_copy_w_armor_prop( "test_armor_chitin_copy_w_armor_prop" );
+static const itype_id
+itype_test_armor_chitin_copy_w_armor_rel( "test_armor_chitin_copy_w_armor_rel" );
+static const itype_id itype_textbook_chemistry( "textbook_chemistry" );
+static const itype_id itype_tshirt( "tshirt" );
+static const itype_id itype_zentai( "zentai" );
+
+static const material_id material_wool( "wool" );
+
+static const recipe_id recipe_pur_tablets( "pur_tablets" );
+
+static const skill_id skill_survival( "survival" );
+
+static const trait_id trait_ANTIFRUIT( "ANTIFRUIT" );
+static const trait_id trait_CANNIBAL( "CANNIBAL" );
+static const trait_id trait_WOOLALLERGY( "WOOLALLERGY" );
+
 // ITEM INFO
 // =========
 //
@@ -384,53 +410,42 @@ TEST_CASE( "item rigidity", "[iteminfo][rigidity]" )
         REQUIRE( briefcase.all_pockets_rigid() );
         CHECK( item_info_str( briefcase, encumbrance ) ==
                "--\n"
-               "<color_c_white>Encumbrance</color>:\n"
-               "L. Arm:  <color_c_yellow>30</color>\n"
-               "Coverage:  <color_c_yellow>10</color>  "
-               "(M):  <color_c_yellow>10</color>  "
-               "(R):  <color_c_yellow>10</color>  "
-               "(V):  <color_c_yellow>0</color>\n"
-               "R. Arm:  <color_c_yellow>30</color>\n"
-               "Coverage:  <color_c_yellow>10</color>  "
-               "(M):  <color_c_yellow>10</color>  "
-               "(R):  <color_c_yellow>10</color>  "
-               "(V):  <color_c_yellow>0</color>\n"
-               "L. Hand:  <color_c_yellow>30</color>\n"
-               "Coverage:  <color_c_yellow>10</color>  "
-               "(M):  <color_c_yellow>10</color>  "
-               "(R):  <color_c_yellow>10</color>  "
-               "(V):  <color_c_yellow>0</color>\n"
-               "R. Hand:  <color_c_yellow>30</color>\n"
-               "Coverage:  <color_c_yellow>10</color>  "
-               "(M):  <color_c_yellow>10</color>  "
-               "(R):  <color_c_yellow>10</color>  "
-               "(V):  <color_c_yellow>0</color>\n" );
+               "<color_c_white>Encumbrance</color>"
+               "  <color_c_yellow>30</color>: The <color_c_cyan>arms</color>. The <color_c_cyan>hands</color>.\n" );
     }
 
     SECTION( "non-rigid items indicate their flexible volume/encumbrance" ) {
         item waterskin( "test_waterskin" );
         item backpack( "test_backpack" );
         item quiver( "test_quiver" );
+        item condom( "test_condom" );
 
         SECTION( "rigidity indicator" ) {
             REQUIRE_FALSE( waterskin.all_pockets_rigid() );
             REQUIRE_FALSE( backpack.all_pockets_rigid() );
             REQUIRE_FALSE( quiver.all_pockets_rigid() );
+            REQUIRE_FALSE( condom.all_pockets_rigid() );
 
             CHECK( item_info_str( waterskin, rigidity ) ==
                    "--\n"
-                   "* This item is <color_c_cyan>not rigid</color>."
+                   "* This items pockets are <color_c_cyan>not rigid</color>."
                    "  Its volume and encumbrance increase with contents.\n" );
 
             CHECK( item_info_str( backpack, rigidity ) ==
                    "--\n"
-                   "* This item is <color_c_cyan>not rigid</color>."
+                   "* This items pockets are <color_c_cyan>not rigid</color>."
                    "  Its volume and encumbrance increase with contents.\n" );
 
             CHECK( item_info_str( quiver, rigidity ) ==
                    "--\n"
-                   "* This item is <color_c_cyan>not rigid</color>."
+                   "* This items pockets are <color_c_cyan>not rigid</color>."
                    "  Its volume and encumbrance increase with contents.\n" );
+
+            // Non-armor item - volume increases, but not encumbrance
+            CHECK( item_info_str( condom, rigidity ) ==
+                   "--\n"
+                   "* This items pockets are <color_c_cyan>not rigid</color>."
+                   "  Its volume increases with contents.\n" );
         }
 
         SECTION( "encumbrance when empty and full" ) {
@@ -439,47 +454,20 @@ TEST_CASE( "item rigidity", "[iteminfo][rigidity]" )
             // based on the pocket "max_contains_volume" (1 encumbrance per 250 ml).
             CHECK( item_info_str( waterskin, encumbrance ) ==
                    "--\n"
-                   "<color_c_white>Encumbrance</color>:\n"
-                   "L. Leg:  <color_c_yellow>0</color>  "
-                   "When full:  <color_c_yellow>6</color>\n"
-                   "Coverage:  <color_c_yellow>5</color>  "
-                   "(M):  <color_c_yellow>5</color>  "
-                   "(R):  <color_c_yellow>5</color>  "
-                   "(V):  <color_c_yellow>0</color>\n"
-                   "R. Leg:  <color_c_yellow>0</color>  "
-                   "When full:  <color_c_yellow>6</color>\n"
-                   "Coverage:  <color_c_yellow>5</color>  "
-                   "(M):  <color_c_yellow>5</color>  "
-                   "(R):  <color_c_yellow>5</color>  "
-                   "(V):  <color_c_yellow>0</color>\n" );
+                   "<color_c_white>Encumbrance</color>"
+                   "  <color_c_yellow>0</color>, When full  <color_c_yellow>6</color>: The <color_c_cyan>legs</color>.\n" );
 
             // test_backpack has an explicit "encumbrance" and "max_encumbrance"
             CHECK( item_info_str( backpack, encumbrance ) ==
                    "--\n"
-                   "<color_c_white>Encumbrance</color>:\n"
-                   "Torso:  <color_c_yellow>2</color>  "
-                   "When full:  <color_c_yellow>15</color>\n"
-                   "Coverage:  <color_c_yellow>30</color>  "
-                   "(M):  <color_c_yellow>30</color>  "
-                   "(R):  <color_c_yellow>30</color>  "
-                   "(V):  <color_c_yellow>0</color>\n" );
+                   "<color_c_white>Encumbrance</color>"
+                   "  <color_c_yellow>2</color>, When full  <color_c_yellow>15</color>: The <color_c_cyan>torso</color>.\n" );
 
             // quiver has no volume, only an implicit volume via ammo
             CHECK( item_info_str( quiver, encumbrance ) ==
                    "--\n"
-                   "<color_c_white>Encumbrance</color>:\n"
-                   "L. Leg:  <color_c_yellow>3</color>  "
-                   "When full:  <color_c_yellow>11</color>\n"
-                   "Coverage:  <color_c_yellow>10</color>  "
-                   "(M):  <color_c_yellow>10</color>  "
-                   "(R):  <color_c_yellow>10</color>  "
-                   "(V):  <color_c_yellow>0</color>\n"
-                   "R. Leg:  <color_c_yellow>3</color>  "
-                   "When full:  <color_c_yellow>11</color>\n"
-                   "Coverage:  <color_c_yellow>10</color>  "
-                   "(M):  <color_c_yellow>10</color>  "
-                   "(R):  <color_c_yellow>10</color>  "
-                   "(V):  <color_c_yellow>0</color>\n" );
+                   "<color_c_white>Encumbrance</color>"
+                   "  <color_c_yellow>3</color>, When full  <color_c_yellow>11</color>: The <color_c_cyan>legs</color>.\n" );
         }
     }
 }
@@ -582,19 +570,19 @@ TEST_CASE( "weapon attack ratings and moves", "[iteminfo][weapon]" )
 
         CHECK( item_info_str( rock, moves ) ==
                "--\n"
-               "Moves per attack: <color_c_yellow>79</color>\n" );
+               "Base moves per attack: <color_c_yellow>79</color>\n" );
 
         CHECK( item_info_str( halligan, moves ) ==
                "--\n"
-               "Moves per attack: <color_c_yellow>145</color>\n" );
+               "Base moves per attack: <color_c_yellow>145</color>\n" );
 
         CHECK( item_info_str( mr_pointy, moves ) ==
                "--\n"
-               "Moves per attack: <color_c_yellow>100</color>\n" );
+               "Base moves per attack: <color_c_yellow>100</color>\n" );
 
         CHECK( item_info_str( arrow, moves ) ==
                "--\n"
-               "Moves per attack: <color_c_yellow>65</color>\n" );
+               "Base moves per attack: <color_c_yellow>65</color>\n" );
     }
 
     SECTION( "base damage per second" ) {
@@ -736,12 +724,8 @@ TEST_CASE( "armor coverage, warmth, and encumbrance", "[iteminfo][armor][coverag
         CHECK( item_info_str( longshirt, { iteminfo_parts::ARMOR_BODYPARTS } ) ==
                "--\n"
                "<color_c_white>Covers</color>:"
-               " The <color_c_cyan>torso</color>."
-               " The <color_c_cyan>arms</color>.\n" );
-
-        CHECK( item_info_str( longshirt, { iteminfo_parts::ARMOR_LAYER } ) ==
-               "--\n"
-               "Layer: <color_c_light_blue>Normal</color>.\n" );
+               " The <color_c_cyan>arms</color>."
+               " The <color_c_cyan>torso</color>.\n" );
 
         // Coverage and warmth are displayed together on a single line
         std::vector<iteminfo_parts> cov_warm_shirt = {
@@ -752,7 +736,10 @@ TEST_CASE( "armor coverage, warmth, and encumbrance", "[iteminfo][armor][coverag
         CHECK( item_info_str( longshirt, cov_warm_shirt )
                ==
                "--\n"
-               "Average Coverage: <color_c_yellow>90</color>%  Warmth: <color_c_yellow>5</color>\n" );
+               "<color_c_white>Total Coverage</color>"
+               "  <color_c_yellow>90</color>%: The <color_c_cyan>arms</color>. The <color_c_cyan>torso</color>.\n"
+               "<color_c_white>Warmth</color>"
+               "  <color_c_yellow>5</color>: The <color_c_cyan>arms</color>. The <color_c_cyan>torso</color>.\n" );
 
         verify_item_encumbrance(
         longshirt, item::encumber_flags::none, 3, {
@@ -788,17 +775,9 @@ TEST_CASE( "armor coverage, warmth, and encumbrance", "[iteminfo][armor][coverag
 
         CHECK( item_info_str( longshirt, { iteminfo_parts::ARMOR_ENCUMBRANCE } ) ==
                "--\n"
-               "<color_c_white>Encumbrance</color>: <color_c_red>(poor fit)</color>\n"
-               "Arms:  <color_c_yellow>3</color>\n"
-               "Coverage:  <color_c_yellow>90</color>  "
-               "(M):  <color_c_yellow>90</color>  "
-               "(R):  <color_c_yellow>90</color>  "
-               "(V):  <color_c_yellow>0</color>\n"
-               "Torso:  <color_c_yellow>3</color>\n"
-               "Coverage:  <color_c_yellow>90</color>  "
-               "(M):  <color_c_yellow>90</color>  "
-               "(R):  <color_c_yellow>90</color>  "
-               "(V):  <color_c_yellow>0</color>\n" );
+               "<color_c_white>Size/Fit</color>: <color_c_red>(poor fit)</color>\n"
+               "<color_c_white>Encumbrance</color>"
+               "  <color_c_yellow>3</color>: The <color_c_cyan>arms</color>. The <color_c_cyan>torso</color>.\n" );
 
         item swat_armor( "test_swat_armor" );
         REQUIRE( swat_armor.get_covered_body_parts().any() );
@@ -806,13 +785,10 @@ TEST_CASE( "armor coverage, warmth, and encumbrance", "[iteminfo][armor][coverag
         CHECK( item_info_str( swat_armor, { iteminfo_parts::ARMOR_BODYPARTS } ) ==
                "--\n"
                "<color_c_white>Covers</color>:"
-               " The <color_c_cyan>torso</color>."
                " The <color_c_cyan>arms</color>."
-               " The <color_c_cyan>legs</color>.\n" );
+               " The <color_c_cyan>legs</color>."
+               " The <color_c_cyan>torso</color>.\n" );
 
-        CHECK( item_info_str( swat_armor, { iteminfo_parts::ARMOR_LAYER } ) ==
-               "--\n"
-               "Layer: <color_c_light_blue>Normal</color>.\n" );
 
         std::vector<iteminfo_parts> cov_warm_swat = { iteminfo_parts::ARMOR_COVERAGE, iteminfo_parts::ARMOR_WARMTH };
         REQUIRE( swat_armor.get_avg_coverage() == 95 );
@@ -820,7 +796,10 @@ TEST_CASE( "armor coverage, warmth, and encumbrance", "[iteminfo][armor][coverag
         CHECK( item_info_str( swat_armor, cov_warm_swat )
                ==
                "--\n"
-               "Average Coverage: <color_c_yellow>95</color>%  Warmth: <color_c_yellow>35</color>\n" );
+               "<color_c_white>Total Coverage</color>"
+               "  <color_c_yellow>95</color>%: The <color_c_cyan>arms</color>. The <color_c_cyan>legs</color>. The <color_c_cyan>torso</color>.\n"
+               "<color_c_white>Warmth</color>"
+               "  <color_c_yellow>35</color>: The <color_c_cyan>arms</color>. The <color_c_cyan>legs</color>. The <color_c_cyan>torso</color>.\n" );
 
         verify_item_coverage(
         swat_armor, {
@@ -875,25 +854,11 @@ TEST_CASE( "armor coverage, warmth, and encumbrance", "[iteminfo][armor][coverag
 
         CHECK( item_info_str( swat_armor, { iteminfo_parts::ARMOR_ENCUMBRANCE } ) ==
                "--\n"
-               "<color_c_white>Encumbrance</color>:\n"
-               "Arms:  <color_c_yellow>12</color>  "
-               "When full:  <color_c_yellow>25</color>\n"
-               "Coverage:  <color_c_yellow>95</color>  "
-               "(M):  <color_c_yellow>95</color>  "
-               "(R):  <color_c_yellow>95</color>  "
-               "(V):  <color_c_yellow>0</color>\n"
-               "Legs:  <color_c_yellow>12</color>  "
-               "When full:  <color_c_yellow>25</color>\n"
-               "Coverage:  <color_c_yellow>95</color>  "
-               "(M):  <color_c_yellow>95</color>  "
-               "(R):  <color_c_yellow>95</color>  "
-               "(V):  <color_c_yellow>0</color>\n"
-               "Torso:  <color_c_yellow>12</color>  "
-               "When full:  <color_c_yellow>25</color>\n"
-               "Coverage:  <color_c_yellow>95</color>  "
-               "(M):  <color_c_yellow>95</color>  "
-               "(R):  <color_c_yellow>95</color>  "
-               "(V):  <color_c_yellow>0</color>\n" );
+               "<color_c_white>Encumbrance</color> "
+               " <color_c_yellow>12</color>, When full  <color_c_yellow>25</color>:"
+               " The <color_c_cyan>arms</color>."
+               " The <color_c_cyan>legs</color>."
+               " The <color_c_cyan>torso</color>.\n" );
 
         // Test copy-from
         item faux_fur_pants( "test_pants_faux_fur" );
@@ -904,17 +869,14 @@ TEST_CASE( "armor coverage, warmth, and encumbrance", "[iteminfo][armor][coverag
                "<color_c_white>Covers</color>:"
                " The <color_c_cyan>legs</color>.\n" );
 
-        CHECK( item_info_str( faux_fur_pants, { iteminfo_parts::ARMOR_LAYER } ) ==
-               "--\n"
-               "Layer: <color_c_light_blue>Normal</color>.\n" );
-
         std::vector<iteminfo_parts> cov_warm_pants = { iteminfo_parts::ARMOR_COVERAGE, iteminfo_parts::ARMOR_WARMTH };
         REQUIRE( faux_fur_pants.get_avg_coverage() == 95 );
         REQUIRE( faux_fur_pants.get_warmth() == 70 );
         CHECK( item_info_str( faux_fur_pants, cov_warm_pants )
                ==
                "--\n"
-               "Average Coverage: <color_c_yellow>95</color>%  Warmth: <color_c_yellow>70</color>\n" );
+               "<color_c_white>Total Coverage</color>  <color_c_yellow>95</color>%: The <color_c_cyan>legs</color>.\n"
+               "<color_c_white>Warmth</color>  <color_c_yellow>70</color>: The <color_c_cyan>legs</color>.\n" );
 
         REQUIRE( faux_fur_pants.get_avg_coverage() == 95 );
         verify_item_coverage(
@@ -974,14 +936,10 @@ TEST_CASE( "armor coverage, warmth, and encumbrance", "[iteminfo][armor][coverag
         CHECK( item_info_str( faux_fur_suit, { iteminfo_parts::ARMOR_BODYPARTS } ) ==
                "--\n"
                "<color_c_white>Covers</color>:"
-               " The <color_c_cyan>head</color>."
-               " The <color_c_cyan>torso</color>."
                " The <color_c_cyan>arms</color>."
-               " The <color_c_cyan>legs</color>.\n" );
-
-        CHECK( item_info_str( faux_fur_suit, { iteminfo_parts::ARMOR_LAYER } ) ==
-               "--\n"
-               "Layer: <color_c_light_blue>Normal</color>.\n" );
+               " The <color_c_cyan>head</color>."
+               " The <color_c_cyan>legs</color>."
+               " The <color_c_cyan>torso</color>.\n" );
 
         std::vector<iteminfo_parts> cov_warm_suit = {
             iteminfo_parts::ARMOR_COVERAGE, iteminfo_parts::ARMOR_WARMTH
@@ -991,7 +949,11 @@ TEST_CASE( "armor coverage, warmth, and encumbrance", "[iteminfo][armor][coverag
         CHECK( item_info_str( faux_fur_suit, cov_warm_suit )
                ==
                "--\n"
-               "Average Coverage: <color_c_yellow>75</color>%  Warmth: <color_c_yellow>5</color>\n" );
+               "<color_c_white>Total Coverage</color>:\n"
+               "  <color_c_yellow>50</color>%: The <color_c_cyan>head</color>. The <color_c_cyan>l. arm</color>. The <color_c_cyan>l. leg</color>.\n"
+               "  <color_c_yellow>100</color>%: The <color_c_cyan>r. arm</color>. The <color_c_cyan>r. leg</color>. The <color_c_cyan>torso</color>.\n"
+               "<color_c_white>Warmth</color>"
+               "  <color_c_yellow>5</color>: The <color_c_cyan>arms</color>. The <color_c_cyan>head</color>. The <color_c_cyan>legs</color>. The <color_c_cyan>torso</color>.\n" );
 
         REQUIRE( faux_fur_suit.get_avg_coverage() == 75 );
         verify_item_coverage(
@@ -1047,43 +1009,72 @@ TEST_CASE( "armor coverage, warmth, and encumbrance", "[iteminfo][armor][coverag
 
         CHECK( item_info_str( faux_fur_suit, { iteminfo_parts::ARMOR_ENCUMBRANCE } ) ==
                "--\n"
-               "<color_c_white>Encumbrance</color>: <color_c_red>(poor fit)</color>\n"
-               "L. Arm:  <color_c_yellow>5</color>  "
-               "When full:  <color_c_yellow>9</color>\n"
-               "Coverage:  <color_c_yellow>50</color>  "
-               "(M):  <color_c_yellow>50</color>  "
-               "(R):  <color_c_yellow>50</color>  "
-               "(V):  <color_c_yellow>0</color>\n"
-               "R. Arm:  <color_c_yellow>10</color>  "
-               "When full:  <color_c_yellow>25</color>\n"
-               "Coverage:  <color_c_yellow>100</color>  "
-               "(M):  <color_c_yellow>100</color>  "
-               "(R):  <color_c_yellow>100</color>  "
-               "(V):  <color_c_yellow>0</color>\n"
-               "Head:  <color_c_yellow>5</color>  "
-               "When full:  <color_c_yellow>9</color>\n"
-               "Coverage:  <color_c_yellow>50</color>  "
-               "(M):  <color_c_yellow>50</color>  "
-               "(R):  <color_c_yellow>50</color>  "
-               "(V):  <color_c_yellow>0</color>\n"
-               "L. Leg:  <color_c_yellow>5</color>  "
-               "When full:  <color_c_yellow>9</color>\n"
-               "Coverage:  <color_c_yellow>50</color>  "
-               "(M):  <color_c_yellow>50</color>  "
-               "(R):  <color_c_yellow>50</color>  "
-               "(V):  <color_c_yellow>0</color>\n"
-               "R. Leg:  <color_c_yellow>10</color>  "
-               "When full:  <color_c_yellow>25</color>\n"
-               "Coverage:  <color_c_yellow>100</color>  "
-               "(M):  <color_c_yellow>100</color>  "
-               "(R):  <color_c_yellow>100</color>  "
-               "(V):  <color_c_yellow>0</color>\n"
-               "Torso:  <color_c_yellow>10</color>  "
-               "When full:  <color_c_yellow>25</color>\n"
-               "Coverage:  <color_c_yellow>100</color>  "
-               "(M):  <color_c_yellow>100</color>  "
-               "(R):  <color_c_yellow>100</color>  "
-               "(V):  <color_c_yellow>0</color>\n" );
+               "<color_c_white>Size/Fit</color>: <color_c_red>(poor fit)</color>\n"
+               "<color_c_white>Encumbrance</color>:\n"
+               "  <color_c_yellow>5</color>, When full  <color_c_yellow>9</color>:"
+               " The <color_c_cyan>head</color>."
+               " The <color_c_cyan>l. arm</color>."
+               " The <color_c_cyan>l. leg</color>.\n"
+               "  <color_c_yellow>10</color>, When full  <color_c_yellow>25</color>:"
+               " The <color_c_cyan>r. arm</color>."
+               " The <color_c_cyan>r. leg</color>."
+               " The <color_c_cyan>torso</color>.\n" );
+        // test complex materials armors
+        item super_tank_top( "test_complex_tanktop" );
+        REQUIRE( super_tank_top.get_covered_body_parts().any() );
+
+        CHECK( item_info_str( super_tank_top, { iteminfo_parts::ARMOR_BODYPARTS } ) ==
+               "--\n"
+               "<color_c_white>Covers</color>:"
+               " The <color_c_cyan>torso</color>.\n" );
+
+        std::vector<iteminfo_parts> cov_warm_super_tank = { iteminfo_parts::ARMOR_COVERAGE, iteminfo_parts::ARMOR_WARMTH };
+        REQUIRE( super_tank_top.get_avg_coverage() == 100 );
+        REQUIRE( super_tank_top.get_warmth() == 20 );
+        CHECK( item_info_str( super_tank_top, cov_warm_super_tank )
+               ==
+               "--\n"
+               "<color_c_white>Total Coverage</color>  <color_c_yellow>100</color>%: The <color_c_cyan>torso</color>.\n"
+               "<color_c_white>Warmth</color>  <color_c_yellow>20</color>: The <color_c_cyan>torso</color>.\n" );
+
+        verify_item_coverage(
+        super_tank_top, {
+            { bodypart_id( "torso" ), 100 },
+            { bodypart_id( "leg_l" ), 0 },
+            { bodypart_id( "leg_r" ), 0 },
+            { bodypart_id( "arm_l" ), 0 },
+            { bodypart_id( "arm_r" ), 0 },
+            { bodypart_id( "head" ), 0 },
+            { bodypart_id( "foot_l" ), 0 },
+            { bodypart_id( "foot_r" ), 0 },
+            { bodypart_id( "eyes" ), 0 },
+            { bodypart_id( "mouth" ), 0 },
+            { bodypart_id( "hand_r" ), 0 },
+            { bodypart_id( "hand_l" ), 0 },
+        }
+        );
+
+        verify_item_encumbrance(
+        super_tank_top, item::encumber_flags::none, 7, {
+            { bodypart_id( "torso" ), 7 },
+            { bodypart_id( "leg_l" ), 0 },
+            { bodypart_id( "leg_r" ), 0 },
+            { bodypart_id( "arm_l" ), 0 },
+            { bodypart_id( "arm_r" ), 0 },
+            { bodypart_id( "head" ), 0 },
+            { bodypart_id( "foot_l" ), 0 },
+            { bodypart_id( "foot_r" ), 0 },
+            { bodypart_id( "eyes" ), 0 },
+            { bodypart_id( "mouth" ), 0 },
+            { bodypart_id( "hand_l" ), 0 },
+            { bodypart_id( "hand_r" ), 0 },
+        }
+        );
+
+        CHECK( item_info_str( super_tank_top, { iteminfo_parts::ARMOR_ENCUMBRANCE } ) ==
+               "--\n"
+               "<color_c_white>Encumbrance</color>"
+               "  <color_c_yellow>7</color>: The <color_c_cyan>torso</color>.\n" );
     }
 
     SECTION( "armor with no coverage omits irrelevant info" ) {
@@ -1091,13 +1082,30 @@ TEST_CASE( "armor coverage, warmth, and encumbrance", "[iteminfo][armor][coverag
         item ear_plugs( "test_ear_plugs" );
         REQUIRE_FALSE( ear_plugs.get_covered_body_parts().any() );
 
-        CHECK( item_info_str( ear_plugs, { iteminfo_parts::ARMOR_BODYPARTS, iteminfo_parts::ARMOR_LAYER,
+        CHECK( item_info_str( ear_plugs, { iteminfo_parts::ARMOR_BODYPARTS,
                                            iteminfo_parts::ARMOR_COVERAGE, iteminfo_parts::ARMOR_WARMTH,
                                            iteminfo_parts::ARMOR_ENCUMBRANCE, iteminfo_parts::ARMOR_PROTECTION
                                          } ) ==
                "--\n"
                "<color_c_white>Covers</color>: <color_c_cyan>Nothing</color>.\n" );
     }
+}
+
+// Related JSON fields:
+// material softness
+// padded flag
+TEST_CASE( "armor rigidity", "[iteminfo][armor][coverage]" )
+{
+    clear_avatar();
+
+    // test complex materials armors
+    item super_tank_top( "test_complex_tanktop" );
+    REQUIRE( super_tank_top.get_covered_body_parts().any() );
+
+    CHECK( item_info_str( super_tank_top, { iteminfo_parts::ARMOR_RIGIDITY } ) ==
+           "--\n"
+           "<color_c_white>This armor is rigid</color>\n"
+           "<color_c_white>This armor is comfortable</color>\n" );
 }
 
 // Related JSON fields:
@@ -1154,9 +1162,9 @@ static void expected_armor_values( const item &armor, float bash, float cut, flo
 
 TEST_CASE( "armor_stats", "[armor][protection]" )
 {
-    expected_armor_values( item( itype_id( "zentai" ) ), 0.2f, 0.2f, 0.16f, 0.2f );
-    expected_armor_values( item( itype_id( "tshirt" ) ), 0.1f, 0.1f, 0.08f, 0.1f );
-    expected_armor_values( item( itype_id( "dress_shirt" ) ), 0.1f, 0.1f, 0.08f, 0.1f );
+    expected_armor_values( item( itype_zentai ), 0.2f, 0.2f, 0.16f, 0.2f );
+    expected_armor_values( item( itype_tshirt ), 0.1f, 0.1f, 0.08f, 0.1f );
+    expected_armor_values( item( itype_dress_shirt ), 0.1f, 0.1f, 0.08f, 0.1f );
 }
 
 // Armor protction is based on materials, thickness, and/or environmental protection rating.
@@ -1176,6 +1184,7 @@ TEST_CASE( "armor protection", "[iteminfo][armor][protection]" )
     clear_avatar();
 
     std::vector<iteminfo_parts> protection = { iteminfo_parts::ARMOR_PROTECTION };
+    std::vector<iteminfo_parts> more_protection = { iteminfo_parts::ARMOR_PROTECTION, iteminfo_parts::ARMOR_ENCUMBRANCE };
 
     // TODO:
     // - Air filtration or gas mask (inactive/active)
@@ -1192,13 +1201,12 @@ TEST_CASE( "armor protection", "[iteminfo][armor][protection]" )
         // Protection info displayed on two lines
         CHECK( item_info_str( longshirt, protection ) ==
                "--\n"
-               "<color_c_white>Protection</color>:"
-               " Bash: <color_c_yellow>0.20</color>"
-               "  Cut: <color_c_yellow>0.20</color>"
-               "  Ballistic: <color_c_yellow>0.20</color>\n"
-               "  Acid: <color_c_yellow>0.00</color>"
-               "  Fire: <color_c_yellow>0.00</color>"
-               "  Environmental: <color_c_yellow>0</color>\n" );
+               "<color_c_white>Protection for</color>: The <color_c_cyan>arms</color>. The <color_c_cyan>torso</color>.\n"
+               "<color_c_white>Coverage</color>: <color_c_light_blue>Normal</color>.\n"
+               "  Default:  <color_c_yellow>90</color>\n"
+               "<color_c_white>Protection</color>:\n"
+               "  Negligible Protection\n"
+             );
     }
 
     SECTION( "moderate protection from physical and environmental damage" ) {
@@ -1212,13 +1220,38 @@ TEST_CASE( "armor protection", "[iteminfo][armor][protection]" )
         // Protection info displayed on two lines
         CHECK( item_info_str( hazmat, protection ) ==
                "--\n"
-               "<color_c_white>Protection</color>:"
-               " Bash: <color_c_yellow>4.00</color>"
-               "  Cut: <color_c_yellow>4.00</color>"
+               "<color_c_white>Protection for</color>: The <color_c_cyan>arms</color>. The <color_c_cyan>eyes</color>. The <color_c_cyan>feet</color>. The <color_c_cyan>hands</color>. The <color_c_cyan>head</color>. The <color_c_cyan>legs</color>. The <color_c_cyan>mouth</color>. The <color_c_cyan>torso</color>.\n"
+               "<color_c_white>Coverage</color>: <color_c_light_blue>Outer</color>.\n"
+               "  Default:  <color_c_yellow>100</color>\n"
+               "<color_c_white>Protection</color>:\n"
+               "  Bash: <color_c_yellow>4.00</color>\n"
+               "  Cut: <color_c_yellow>4.00</color>\n"
                "  Ballistic: <color_c_yellow>4.00</color>\n"
-               "  Acid: <color_c_yellow>9.00</color>"
-               "  Fire: <color_c_yellow>1.00</color>"
-               "  Environmental: <color_c_yellow>20</color>\n" );
+               "  Acid: <color_c_yellow>9.00</color>\n"
+               "  Fire: <color_c_yellow>1.00</color>\n"
+               "  Environmental: <color_c_yellow>20</color>\n"
+             );
+    }
+
+    SECTION( "complex protection from physical and environmental damage" ) {
+        item super_tanktop( "test_complex_tanktop" );
+        REQUIRE( super_tanktop.get_covered_body_parts().any() );
+        // these values are averaged values but test that assumed armor portion is working at all
+        expected_armor_values( super_tanktop, 14, 14, 11.2f, 8.66667f );
+
+        // Protection info displayed on two lines
+        CHECK( item_info_str( super_tanktop, more_protection ) ==
+               "--\n"
+               "<color_c_white>Encumbrance</color>  <color_c_yellow>7</color>: The <color_c_cyan>torso</color>.\n"
+               "--\n"
+               "<color_c_white>Protection for</color>: The <color_c_cyan>torso</color>.\n"
+               "<color_c_white>Coverage</color>: <color_c_light_blue>Close to skin</color>.\n"
+               "  Default:  <color_c_yellow>100</color>\n"
+               "<color_c_white>Protection</color>: <color_c_red>4%</color>, <color_c_yellow>Median</color>, <color_c_green>4%</color>\n"
+               "  Bash:  <color_c_red>1.00</color>, <color_c_yellow>11.00</color>, <color_c_green>21.00</color>\n"
+               "  Cut:  <color_c_red>1.00</color>, <color_c_yellow>11.00</color>, <color_c_green>21.00</color>\n"
+               "  Ballistic:  <color_c_red>1.00</color>, <color_c_yellow>7.00</color>, <color_c_green>13.00</color>\n"
+             );
     }
 
     SECTION( "pet armor with good physical and environmental protection" ) {
@@ -1231,13 +1264,14 @@ TEST_CASE( "armor protection", "[iteminfo][armor][protection]" )
 
         CHECK( item_info_str( meower_armor, protection ) ==
                "--\n"
-               "<color_c_white>Protection</color>:"
-               " Bash: <color_c_yellow>4.00</color>"
-               "  Cut: <color_c_yellow>6.00</color>"
+               "<color_c_white>Protection</color>:\n"
+               "  Bash: <color_c_yellow>4.00</color>\n"
+               "  Cut: <color_c_yellow>6.00</color>\n"
                "  Ballistic: <color_c_yellow>10.00</color>\n"
-               "  Acid: <color_c_yellow>5.00</color>"
-               "  Fire: <color_c_yellow>3.00</color>"
-               "  Environmental: <color_c_yellow>10</color>\n" );
+               "  Acid: <color_c_yellow>5.00</color>\n"
+               "  Fire: <color_c_yellow>3.00</color>\n"
+               "  Environmental: <color_c_yellow>10</color>\n"
+             );
     }
 }
 
@@ -1486,16 +1520,16 @@ TEST_CASE( "gun or other ranged weapon attributes", "[iteminfo][weapon][gun]" )
         std::vector<iteminfo_parts> aim_stats = { iteminfo_parts::GUN_AIMING_STATS };
         CHECK( item_info_str( glock, aim_stats ) ==
                "--\n"
-               "<color_c_white>Base aim speed</color>: <color_c_yellow>104</color>\n"
+               "<color_c_white>Base aim speed</color>: <color_c_yellow>48</color>\n"
                "<color_c_cyan>Regular</color>\n"
                "Even chance of good hit at range: <color_c_yellow>3</color>\n"
-               "Time to reach aim level: <color_c_yellow>115</color> moves\n"
+               "Time to reach aim level: <color_c_yellow>99</color> moves\n"
                "<color_c_cyan>Careful</color>\n"
-               "Even chance of good hit at range: <color_c_yellow>4</color>\n"
-               "Time to reach aim level: <color_c_yellow>145</color> moves\n"
-               "<color_c_cyan>Precise</color>\n"
                "Even chance of good hit at range: <color_c_yellow>6</color>\n"
-               "Time to reach aim level: <color_c_yellow>174</color> moves\n" );
+               "Time to reach aim level: <color_c_yellow>165</color> moves\n"
+               "<color_c_cyan>Precise</color>\n"
+               "Even chance of good hit at range: <color_c_yellow>8</color>\n"
+               "Time to reach aim level: <color_c_yellow>263</color> moves\n" );
     }
 
     SECTION( "compatible magazines" ) {
@@ -1633,7 +1667,8 @@ TEST_CASE( "gunmod info", "[iteminfo][gunmod]" )
     std::vector<iteminfo_parts> no_sights = { iteminfo_parts::DESCRIPTION_GUNMOD_DISABLESSIGHTS };
     std::vector<iteminfo_parts> consumable = { iteminfo_parts::DESCRIPTION_GUNMOD_CONSUMABLE };
     std::vector<iteminfo_parts> disp_sight = { iteminfo_parts::GUNMOD_DISPERSION_SIGHT };
-    std::vector<iteminfo_parts> aim_speed = { iteminfo_parts::GUNMOD_AIMSPEED };
+    std::vector<iteminfo_parts> field_of_view = { iteminfo_parts::GUNMOD_FIELD_OF_VIEW};
+    std::vector<iteminfo_parts> aim_speed_modifier = { iteminfo_parts::GUNMOD_AIM_SPEED_MODIFIER };
     std::vector<iteminfo_parts> damage = { iteminfo_parts::GUNMOD_DAMAGE };
     std::vector<iteminfo_parts> handling = { iteminfo_parts::GUNMOD_HANDLING };
     std::vector<iteminfo_parts> usedon = { iteminfo_parts::GUNMOD_USEDON };
@@ -1679,9 +1714,13 @@ TEST_CASE( "gunmod info", "[iteminfo][gunmod]" )
            "--\n"
            "Sight dispersion: <color_c_yellow>11</color>\n" );
 
-    CHECK( item_info_str( supp, aim_speed ) ==
+    CHECK( item_info_str( supp, field_of_view ) ==
            "--\n"
-           "Aim speed: <color_c_yellow>4</color>\n" );
+           "Field of view: <color_c_yellow>300</color>\n" );
+
+    CHECK( item_info_str( supp, aim_speed_modifier ) ==
+           "--\n"
+           "Aim speed modifier: <color_c_yellow>0</color>\n" );
 
     CHECK( item_info_str( supp, damage ) ==
            "--\n"
@@ -1764,7 +1803,7 @@ TEST_CASE( "nutrients in food", "[iteminfo][food]" )
 
         CHECK( item_info_str( ice_cream, { iteminfo_parts::FOOD_VITAMINS } ) ==
                "--\n"
-               "Vitamins (RDA): Calcium (9%), Vitamin A (9%), and Vitamin B12 (11%)\n" );
+               "Vitamins (RDA): Calcium (9%)\n" );
     }
 
     SECTION( "nutrient ranges for recipe exemplars", "[iteminfo]" ) {
@@ -1775,14 +1814,13 @@ TEST_CASE( "nutrients in food", "[iteminfo][food]" )
                "--\n"
                "Nutrition will <color_cyan>vary with chosen ingredients</color>.\n"
                "<color_c_white>Calories (kcal)</color>:"
-               " <color_c_yellow>126</color>-<color_c_yellow>535</color>"
+               " <color_c_yellow>56</color>-<color_c_yellow>532</color>"
                "  Quench: <color_c_yellow>0</color>\n" );
 
         CHECK( item_info_str( ice_cream, { iteminfo_parts::FOOD_VITAMINS } ) ==
                "--\n"
                "Nutrition will <color_cyan>vary with chosen ingredients</color>.\n"
-               "Vitamins (RDA): Calcium (7-31%), Iron (0-89%), "
-               "Vitamin A (3-11%), Vitamin B12 (2-6%), and Vitamin C (1-85%)\n" );
+               "Vitamins (RDA): Calcium (7-37%), Iron (0-131%), and Vitamin C (1-79%)\n" );
     }
 }
 
@@ -1889,8 +1927,8 @@ TEST_CASE( "food character is allergic to", "[iteminfo][food][allergy]" )
     std::vector<iteminfo_parts> allergen = { iteminfo_parts::FOOD_ALLERGEN };
 
     GIVEN( "character allergic to fruit" ) {
-        player_character.toggle_trait( trait_id( "ANTIFRUIT" ) );
-        REQUIRE( player_character.has_trait( trait_id( "ANTIFRUIT" ) ) );
+        player_character.toggle_trait( trait_ANTIFRUIT );
+        REQUIRE( player_character.has_trait( trait_ANTIFRUIT ) );
 
         THEN( "fruit indicates an allergic reaction" ) {
             item apple( "test_apple" );
@@ -1937,8 +1975,8 @@ TEST_CASE( "food with hidden poison or hallucinogen", "[iteminfo][food][poison][
     // Seeing hidden poison or hallucinogen depends on character survival skill
     // At low level, no info is shown
     GIVEN( "survival 2" ) {
-        player_character.set_skill_level( skill_id( "survival" ), 2 );
-        REQUIRE( player_character.get_skill_level( skill_id( "survival" ) ) == 2 );
+        player_character.set_skill_level( skill_survival, 2 );
+        REQUIRE( player_character.get_skill_level( skill_survival ) == 2 );
 
         THEN( "cannot see hidden poison or hallucinogen" ) {
             CHECK( item_info_str( almond, poison ).empty() );
@@ -1948,8 +1986,8 @@ TEST_CASE( "food with hidden poison or hallucinogen", "[iteminfo][food][poison][
 
     // Hidden poison is visible at survival level 3
     GIVEN( "survival 3" ) {
-        player_character.set_skill_level( skill_id( "survival" ), 3 );
-        REQUIRE( player_character.get_skill_level( skill_id( "survival" ) ) == 3 );
+        player_character.set_skill_level( skill_survival, 3 );
+        REQUIRE( player_character.get_skill_level( skill_survival ) == 3 );
 
         THEN( "can see hidden poison" ) {
             CHECK( item_info_str( almond, poison ) ==
@@ -1965,8 +2003,8 @@ TEST_CASE( "food with hidden poison or hallucinogen", "[iteminfo][food][poison][
 
     // Hidden hallucinogen is not visible until survival level 5
     GIVEN( "survival 4" ) {
-        player_character.set_skill_level( skill_id( "survival" ), 4 );
-        REQUIRE( player_character.get_skill_level( skill_id( "survival" ) ) == 4 );
+        player_character.set_skill_level( skill_survival, 4 );
+        REQUIRE( player_character.get_skill_level( skill_survival ) == 4 );
 
         THEN( "still cannot see hidden hallucinogen" ) {
             CHECK( item_info_str( nutmeg, hallu ).empty() );
@@ -1974,8 +2012,8 @@ TEST_CASE( "food with hidden poison or hallucinogen", "[iteminfo][food][poison][
     }
 
     GIVEN( "survival 5" ) {
-        player_character.set_skill_level( skill_id( "survival" ), 5 );
-        REQUIRE( player_character.get_skill_level( skill_id( "survival" ) ) == 5 );
+        player_character.set_skill_level( skill_survival, 5 );
+        REQUIRE( player_character.get_skill_level( skill_survival ) == 5 );
 
         THEN( "can see hidden hallucinogen" ) {
             CHECK( item_info_str( nutmeg, hallu ) ==
@@ -2004,7 +2042,7 @@ TEST_CASE( "food that is made of human flesh", "[iteminfo][food][cannibal]" )
     REQUIRE( thumb.has_flag( flag_CANNIBALISM ) );
 
     GIVEN( "character is not a cannibal" ) {
-        REQUIRE_FALSE( player_character.has_trait( trait_id( "CANNIBAL" ) ) );
+        REQUIRE_FALSE( player_character.has_trait( trait_CANNIBAL ) );
         THEN( "human flesh is indicated as bad" ) {
             // red highlight
             CHECK( item_info_str( thumb, cannibal ) ==
@@ -2014,8 +2052,8 @@ TEST_CASE( "food that is made of human flesh", "[iteminfo][food][cannibal]" )
     }
 
     GIVEN( "character is a cannibal" ) {
-        player_character.toggle_trait( trait_id( "CANNIBAL" ) );
-        REQUIRE( player_character.has_trait( trait_id( "CANNIBAL" ) ) );
+        player_character.toggle_trait( trait_CANNIBAL );
+        REQUIRE( player_character.has_trait( trait_CANNIBAL ) );
 
         THEN( "human flesh is indicated as good" ) {
             // green highlight
@@ -2092,10 +2130,11 @@ TEST_CASE( "list of item qualities", "[iteminfo][quality]" )
         item halligan( "test_halligan" );
         CHECK( item_info_str( halligan, qualities ) ==
                "--\n"
-               "Has level <color_c_cyan>1 digging</color> quality.\n"
-               "Has level <color_c_cyan>2 hammering</color> quality.\n"
-               "Has level <color_c_cyan>4 prying</color> quality.\n"
-               "Has level <color_c_cyan>1 nail prying</color> quality.\n" );
+               "<color_c_white>Has qualities</color>:\n"
+               "Level <color_c_cyan>1 digging</color> quality\n"
+               "Level <color_c_cyan>2 hammering</color> quality\n"
+               "Level <color_c_cyan>4 prying</color> quality\n"
+               "Level <color_c_cyan>1 nail prying</color> quality\n" );
     }
 
     SECTION( "bottle jack" ) {
@@ -2105,14 +2144,16 @@ TEST_CASE( "list of item qualities", "[iteminfo][quality]" )
             override_option opt_kg( "USE_METRIC_WEIGHTS", "kg" );
             CHECK( item_info_str( jack, qualities ) ==
                    "--\n"
-                   "Has level <color_c_cyan>4 jacking</color> quality and is rated at"
+                   "<color_c_white>Has qualities</color>:\n"
+                   "Level <color_c_cyan>4 jacking</color> quality, rated at"
                    " <color_c_cyan>2000</color> kg\n" );
         }
         SECTION( "imperial units" ) {
             override_option opt_lbs( "USE_METRIC_WEIGHTS", "lbs" );
             CHECK( item_info_str( jack, qualities ) ==
                    "--\n"
-                   "Has level <color_c_cyan>4 jacking</color> quality and is rated at"
+                   "<color_c_white>Has qualities</color>:\n"
+                   "Level <color_c_cyan>4 jacking</color> quality, rated at"
                    " <color_c_cyan>4409</color> lbs\n" );
         }
     }
@@ -2122,11 +2163,39 @@ TEST_CASE( "list of item qualities", "[iteminfo][quality]" )
 
         CHECK( item_info_str( sonic, qualities ) ==
                "--\n"
-               "Has level <color_c_cyan>30 lockpicking</color> quality.\n"
-               "Has level <color_c_cyan>2 prying</color> quality.\n"
-               "Has level <color_c_cyan>2 screw driving</color> quality.\n"
-               "Has level <color_c_cyan>1 fine screw driving</color> quality.\n"
-               "Has level <color_c_cyan>1 bolt turning</color> quality.\n" );
+               "<color_c_white>Has qualities</color>:\n"
+               "Level <color_c_cyan>30 lockpicking</color> quality\n"
+               "Level <color_c_cyan>2 prying</color> quality\n"
+               "Level <color_c_cyan>2 screw driving</color> quality\n"
+               "Level <color_c_cyan>1 fine screw driving</color> quality\n"
+               "Level <color_c_cyan>1 bolt turning</color> quality\n" );
+    }
+
+    SECTION( "cordless drill" ) {
+        // Cordless drill has both qualities and charged_qualities
+        item drill( "test_cordless_drill" );
+        item battery( "medium_battery_cell" );
+
+        // Without enough charges
+        CHECK( item_info_str( drill, qualities ) ==
+               "--\n"
+               "<color_c_white>Has qualities</color>:\n"
+               "Level <color_c_cyan>1 screw driving</color> quality\n"
+               "<color_c_red>Needs 5 or more charges</color> for qualities:\n"
+               "Level <color_c_cyan>3 drilling</color> quality\n" );
+
+        // With enough charges
+        int bat_charges = drill.type->charges_to_use();
+        battery.ammo_set( battery.ammo_default(), bat_charges );
+        drill.put_in( battery, item_pocket::pocket_type::MAGAZINE_WELL );
+        REQUIRE( drill.ammo_remaining() == bat_charges );
+
+        CHECK( item_info_str( drill, qualities ) ==
+               "--\n"
+               "<color_c_white>Has qualities</color>:\n"
+               "Level <color_c_cyan>1 screw driving</color> quality\n"
+               "<color_c_green>Has enough charges</color> for qualities:\n"
+               "Level <color_c_cyan>3 drilling</color> quality\n" );
     }
 }
 
@@ -2155,7 +2224,7 @@ TEST_CASE( "tool info", "[iteminfo][tool]" )
         std::vector<iteminfo_parts> charges = { iteminfo_parts::TOOL_CHARGES };
 
         item matches( "test_matches" );
-        matches.ammo_set( itype_id( "match" ) );
+        matches.ammo_set( itype_match );
         REQUIRE( matches.ammo_remaining() > 0 );
 
         CHECK( item_info_str( matches, charges ) ==
@@ -2167,14 +2236,14 @@ TEST_CASE( "tool info", "[iteminfo][tool]" )
         std::vector<iteminfo_parts> burnout = { iteminfo_parts::TOOL_BURNOUT };
 
         item candle( "candle" );
-        candle.ammo_set( itype_id( "candle_wax" ) );
+        candle.ammo_set( itype_candle_wax );
         REQUIRE( candle.ammo_remaining() > 0 );
 
         CHECK( item_info_str( candle, burnout ) ==
                "--\n"
                "<color_c_white>Fuel</color>: It's new, and ready to burn.\n" );
 
-        candle.ammo_set( itype_id( "candle_wax" ), 49 );
+        candle.ammo_set( itype_candle_wax, 49 );
         CHECK( item_info_str( candle, burnout ) ==
                "--\n"
                "<color_c_white>Fuel</color>: More than half has burned away.\n" );
@@ -2276,12 +2345,12 @@ TEST_CASE( "bionic info", "[iteminfo][bionic]" )
     CHECK( item_info_str( nostril, {} ) ==
            "--\n"
            "<color_c_white>Encumbrance</color>: "
-           "Mouth <color_c_yellow>10</color>" );
+           "mouth <color_c_yellow>10</color>" );
 
     CHECK( item_info_str( purifier, {} ) ==
            "--\n"
            "<color_c_white>Environmental Protection</color>: "
-           "Mouth <color_c_yellow>9</color>" );
+           "mouth <color_c_yellow>9</color>" );
 }
 
 // Functions:
@@ -2307,12 +2376,12 @@ TEST_CASE( "repairable and with what tools", "[iteminfo][repair]" )
 
     CHECK( item_info_str( halligan, repaired ) ==
            "--\n"
-           "<color_c_white>Repair</color> using extended toolset, arc welder, or makeshift arc welder.\n" );
+           "<color_c_white>Repair</color> using extended multitool, arc welder, or makeshift arc welder.\n" );
 
     // FIXME: Use an item that can only be repaired by test tools
     CHECK( item_info_str( hazmat, repaired ) ==
            "--\n"
-           "<color_c_white>Repair</color> using soldering iron, TEST soldering iron, or extended toolset.\n" );
+           "<color_c_white>Repair</color> using gunsmith repair kit, firearm repair kit, soldering iron, TEST soldering iron, or extended multitool.\n" );
 
     CHECK( item_info_str( rock, repaired ) ==
            "--\n"
@@ -2333,16 +2402,16 @@ TEST_CASE( "disassembly time and yield", "[iteminfo][disassembly]" )
     CHECK( item_info_str( iron, disassemble ) ==
            "--\n"
            "<color_c_white>Disassembly</color> takes about 20 minutes, requires 1 tool"
-           " with <color_c_cyan>cutting of 1</color> or more and 1 tool with"
+           " with <color_c_cyan>cutting of 2</color> or more and 1 tool with"
            " <color_c_cyan>screw driving of 1</color> or more and <color_c_white>might"
-           " yield</color>: 2 electronic scraps, copper (1), scrap metal (1), and copper"
-           " wire (5).\n" );
+           " yield</color>: 2 electronic scraps, 1 copper, 1 scrap metal, and 5 copper"
+           " wire.\n" );
 
     CHECK( item_info_str( metal, disassemble ) ==
            "--\n"
            "<color_c_white>Disassembly</color> takes about 2 minutes, requires 1 tool"
            " with <color_c_cyan>metal sawing of 2</color> or more and <color_c_white>might"
-           " yield</color>: TEST small metal sheet (24).\n" );
+           " yield</color>: 24 TEST small metal sheet.\n" );
 }
 
 // Related JSON fields:
@@ -2399,7 +2468,7 @@ TEST_CASE( "show available recipes with item as an ingredient", "[iteminfo][reci
     clear_avatar();
     avatar &player_character = get_avatar();
 
-    const recipe *purtab = &recipe_id( "pur_tablets" ).obj();
+    const recipe *purtab = &recipe_pur_tablets.obj();
     recipe_subset &known_recipes = const_cast<recipe_subset &>
                                    ( player_character.get_learned_recipes() );
     known_recipes.clear();
@@ -2408,7 +2477,7 @@ TEST_CASE( "show available recipes with item as an ingredient", "[iteminfo][reci
     std::vector<iteminfo_parts> crafting = { iteminfo_parts::DESCRIPTION_APPLICABLE_RECIPES };
 
     GIVEN( "character has a potassium iodide tablet and no skill" ) {
-        player_character.worn.emplace_back( "backpack" );
+        player_character.worn.wear_item( player_character, item( "backpack" ), false, false );
         item &iodine = player_character.i_add( item( "iodine" ) );
         player_character.empty_skills();
         REQUIRE( !player_character.knows_recipe( purtab ) );
@@ -2442,7 +2511,7 @@ TEST_CASE( "show available recipes with item as an ingredient", "[iteminfo][reci
             WHEN( "they have the recipe in a book, but not memorized" ) {
                 item &textbook = player_character.i_add( item( "textbook_chemistry" ) );
                 player_character.identify( textbook );
-                REQUIRE( player_character.has_identified( itype_id( "textbook_chemistry" ) ) );
+                REQUIRE( player_character.has_identified( itype_textbook_chemistry ) );
                 // update the crafting inventory cache
                 player_character.moves++;
 
@@ -2488,8 +2557,8 @@ TEST_CASE( "pocket info for a simple container", "[iteminfo][pocket][container]"
            "--\n"
            "<color_c_white>Total capacity</color>:\n"
            "Volume: <color_c_yellow>1.50</color> L  Weight: <color_c_yellow>3.00</color> kg\n"
-           "Maximum item length: <color_c_yellow>12</color> cm\n"
-           "Maximum item volume: <color_c_yellow>0.015 L</color>\n"
+           "Item length: <color_c_yellow>0</color> cm to <color_c_yellow>12</color> cm\n"
+           "Maximum item volume: <color_c_yellow>0.015</color> L\n"
            "Base moves to remove item: <color_c_yellow>220</color>\n"
            "This pocket can <color_c_cyan>contain a liquid</color>.\n" );
 }
@@ -2514,8 +2583,8 @@ TEST_CASE( "pocket info units - imperial or metric", "[iteminfo][pocket][units]"
                    "--\n"
                    "<color_c_white>Total capacity</color>:\n"
                    "Volume: <color_c_yellow>3.75</color> L  Weight: <color_c_yellow>5.00</color> kg\n"
-                   "Maximum item length: <color_c_yellow>226</color> mm\n"
-                   "Maximum item volume: <color_c_yellow>0.015 L</color>\n"
+                   "Item length: <color_c_yellow>0</color> mm to <color_c_yellow>226</color> mm\n"
+                   "Maximum item volume: <color_c_yellow>0.015</color> L\n"
                    "Base moves to remove item: <color_c_yellow>100</color>\n"
                    "This pocket is <color_c_cyan>rigid</color>.\n"
                    "This pocket can <color_c_cyan>contain a liquid</color>.\n" );
@@ -2532,8 +2601,8 @@ TEST_CASE( "pocket info units - imperial or metric", "[iteminfo][pocket][units]"
                    "--\n"
                    "<color_c_white>Total capacity</color>:\n"
                    "Volume: <color_c_yellow>3.97</color> qt  Weight: <color_c_yellow>11.02</color> lbs\n"
-                   "Maximum item length: <color_c_yellow>8</color> in.\n"
-                   "Maximum item volume: <color_c_yellow>0.016 qt</color>\n"
+                   "Item length: <color_c_yellow>0</color> in. to <color_c_yellow>8</color> in.\n"
+                   "Maximum item volume: <color_c_yellow>0.016</color> qt\n"
                    "Base moves to remove item: <color_c_yellow>100</color>\n"
                    "This pocket is <color_c_cyan>rigid</color>.\n"
                    "This pocket can <color_c_cyan>contain a liquid</color>.\n" );
@@ -2566,11 +2635,12 @@ TEST_CASE( "pocket info for a multi-pocket item", "[iteminfo][pocket][multiple]"
            "<color_c_white>Total capacity</color>:\n"
            "Volume: <color_c_yellow>6.00</color> L  Weight: <color_c_yellow>4.80</color> kg\n"
            "--\n"
-           "<color_c_white>4 Pockets</color> with capacity:\n"
+           "<color_c_white>4 pockets</color> with capacity:\n"
            "Volume: <color_c_yellow>1.50</color> L  Weight: <color_c_yellow>1.20</color> kg\n"
-           "Maximum item length: <color_c_yellow>70</color> cm\n"
-           "Minimum item volume: <color_c_yellow>0.050 L</color>\n"
+           "Item length: <color_c_yellow>0</color> cm to <color_c_yellow>70</color> cm\n"
+           "Minimum item volume: <color_c_yellow>0.050</color> L\n"
            "Base moves to remove item: <color_c_yellow>50</color>\n"
+           "This is a <color_c_cyan>holster</color>, it only holds <color_c_cyan>one item at a time</color>.\n"
            "<color_c_white>Restrictions</color>:\n"
            "* Item must clip onto a belt loop\n"
            "* <color_c_white>or</color> Item must fit in a sheath\n" );
@@ -2678,11 +2748,11 @@ TEST_CASE( "final info", "[iteminfo][final]" )
 
     SECTION( "material allergy" ) {
         item socks( "test_socks" );
-        REQUIRE( socks.made_of( material_id( "wool" ) ) );
+        REQUIRE( socks.made_of( material_wool ) );
 
         WHEN( "avatar has a wool allergy" ) {
-            player_character.toggle_trait( trait_id( "WOOLALLERGY" ) );
-            REQUIRE( player_character.has_trait( trait_id( "WOOLALLERGY" ) ) );
+            player_character.toggle_trait( trait_WOOLALLERGY );
+            REQUIRE( player_character.has_trait( trait_WOOLALLERGY ) );
 
             CHECK( item_info_str( socks, { iteminfo_parts::DESCRIPTION_ALLERGEN } ) ==
                    "--\n"
@@ -2775,4 +2845,81 @@ TEST_CASE( "item debug info", "[iteminfo][debug][!mayfail][.]" )
                "latent heat: <color_c_yellow>20</color>\n"
                "Freeze point: <color_c_yellow>32</color>\n" );
     }
+}
+
+TEST_CASE( "Armor values preserved after copy-from", "[iteminfo][armor][protection]" )
+{
+    // Normal item definition, no copy
+    item armor( itype_test_armor_chitin );
+    // Copied item definition, no explicit "armor" field
+    item armor_copy( itype_test_armor_chitin_copy );
+    // Copied item definition, explicit "armor" field defined
+    item armor_copy_w_armor( itype_test_armor_chitin_copy_w_armor );
+    // Copied item definition, no explicit "armor" field, using "proportional"
+    item armor_copy_prop( itype_test_armor_chitin_copy_prop );
+    // Copied item definition, explicit "armor" field defined, using "proportional"
+    item armor_copy_w_armor_prop( itype_test_armor_chitin_copy_w_armor_prop );
+    // Copied item definition, no explicit "armor" field, using "relative"
+    item armor_copy_rel( itype_test_armor_chitin_copy_rel );
+    // Copied item definition, explicit "armor" field defined, using "relative"
+    item armor_copy_w_armor_rel( itype_test_armor_chitin_copy_w_armor_rel );
+
+    std::vector<iteminfo_parts> infoparts = { iteminfo_parts::ARMOR_PROTECTION };
+
+    std::string a_str = item_info_str( armor, infoparts );
+    std::string a_copy_str = item_info_str( armor_copy, infoparts );
+    std::string a_copy_w_armor_str = item_info_str( armor_copy_w_armor, infoparts );
+    std::string a_copy_prop_str = item_info_str( armor_copy_prop, infoparts );
+    std::string a_copy_w_armor_prop_str = item_info_str( armor_copy_w_armor_prop, infoparts );
+    std::string a_copy_rel_str = item_info_str( armor_copy_rel, infoparts );
+    std::string a_copy_w_armor_rel_str = item_info_str( armor_copy_w_armor_rel, infoparts );
+
+    const std::string info_str =
+        "--\n"
+        "<color_c_white>Protection for</color>: The <color_c_cyan>legs</color>. The <color_c_cyan>torso</color>.\n"
+        "<color_c_white>Coverage</color>: <color_c_light_blue>Outer</color>.\n"
+        "  Default:  <color_c_yellow>90</color>\n"
+        "<color_c_white>Protection</color>:\n"
+        "  Bash: <color_c_yellow>10.00</color>\n"
+        "  Cut: <color_c_yellow>16.00</color>\n"
+        "  Ballistic: <color_c_yellow>5.60</color>\n"
+        "  Acid: <color_c_yellow>3.60</color>\n"
+        "  Fire: <color_c_yellow>1.50</color>\n"
+        "  Environmental: <color_c_yellow>6</color>\n";
+
+    CHECK( a_str == info_str );
+    CHECK( a_copy_str == info_str );
+    CHECK( a_copy_w_armor_str == info_str );
+
+    const std::string info_prop_str =
+        "--\n"
+        "<color_c_white>Protection for</color>: The <color_c_cyan>legs</color>. The <color_c_cyan>torso</color>.\n"
+        "<color_c_white>Coverage</color>: <color_c_light_blue>Outer</color>.\n"
+        "  Default:  <color_c_yellow>90</color>\n"
+        "<color_c_white>Protection</color>:\n"
+        "  Bash: <color_c_yellow>12.00</color>\n"
+        "  Cut: <color_c_yellow>19.20</color>\n"
+        "  Ballistic: <color_c_yellow>6.72</color>\n"
+        "  Acid: <color_c_yellow>4.20</color>\n"
+        "  Fire: <color_c_yellow>1.75</color>\n"
+        "  Environmental: <color_c_yellow>7</color>\n";
+
+    CHECK( a_copy_prop_str == info_prop_str );
+    CHECK( a_copy_w_armor_prop_str == info_prop_str );
+
+    const std::string info_rel_str =
+        "--\n"
+        "<color_c_white>Protection for</color>: The <color_c_cyan>legs</color>. The <color_c_cyan>torso</color>.\n"
+        "<color_c_white>Coverage</color>: <color_c_light_blue>Outer</color>.\n"
+        "  Default:  <color_c_yellow>90</color>\n"
+        "<color_c_white>Protection</color>:\n"
+        "  Bash: <color_c_yellow>15.00</color>\n"
+        "  Cut: <color_c_yellow>24.00</color>\n"
+        "  Ballistic: <color_c_yellow>8.40</color>\n"
+        "  Acid: <color_c_yellow>4.80</color>\n"
+        "  Fire: <color_c_yellow>2.00</color>\n"
+        "  Environmental: <color_c_yellow>8</color>\n";
+
+    CHECK( a_copy_rel_str == info_rel_str );
+    CHECK( a_copy_w_armor_rel_str == info_rel_str );
 }

@@ -3,7 +3,7 @@
     "id": "anesthetic_kit",
     "type": "TOOL",
     "name": { "str": "anesthesia kit" },
-    "description": "A kit for inducing anesthesia for surgery, containing specialized canisters with a variety of powerful hypnotic, analgetic, and stimulative drugs.  It's intended for use in specialized medical equipment, and can't be administered manually.",
+    "description": "A kit for inducing anesthesia for surgery, containing specialized canisters with a variety of powerful hypnotic, analgesic, and stimulative drugs.  It's intended for use in specialized medical equipment, and can't be administered manually.",
     "weight": "100 g",
     "volume": "3250 ml",
     "price": 1000,
@@ -17,47 +17,13 @@
     "pocket_data": [ { "watertight": true, "rigid": true, "pocket_type": "MAGAZINE", "ammo_restriction": { "anesthetic": 6000 } } ]
   },
   {
-    "id": "autoclave",
-    "type": "TOOL",
-    "name": { "str": "autoclave" },
-    "description": "This is an autoclave.  It's useful for sterilizing things like CBMs.  It requires a massive amount of power, so standard batteries will not power it sufficiently.",
-    "weight": "34500 g",
-    "volume": "76 L",
-    "price": 162654,
-    "price_postapoc": 2000,
-    "to_hit": -6,
-    "bashing": 10,
-    "material": [ "steel" ],
-    "symbol": "A",
-    "color": "yellow",
-    "use_action": [ "AUTOCLAVE" ],
-    "flags": [ "ALLOWS_REMOTE_USE" ],
-    "power_draw": 1500000,
-    "looks_like": "microwave",
-    "ammo": [ "battery" ],
-    "pocket_data": [
-      {
-        "pocket_type": "MAGAZINE_WELL",
-        "flag_restriction": [ "BATTERY_HEAVY" ],
-        "default_magazine": "heavy_plus_battery_cell"
-      },
-      {
-        "pocket_type": "CONTAINER",
-        "holster": true,
-        "max_contains_volume": "20 L",
-        "max_contains_weight": "20 kg",
-        "flag_restriction": [ "CBM" ]
-      }
-    ]
-  },
-  {
     "id": "inhaler",
     "type": "TOOL",
     "category": "drugs",
     "name": { "str": "inhaler" },
     "description": "Albuterol inhaler.  Used in the treatment of bronchospasm, it is a lifeline for people with asthma.  A mild stimulant, it may cause nervousness or tremors.",
     "weight": "85 g",
-    "volume": "250 ml",
+    "volume": "100 ml",
     "price": 5000,
     "price_postapoc": 750,
     "material": [ "plastic" ],
@@ -109,7 +75,7 @@
     "material": [ "steel" ],
     "symbol": ",",
     "color": "light_gray",
-    "qualities": [ [ "CUT", 1 ], [ "CUT_FINE", 3 ], [ "BUTCHER", 8 ] ],
+    "qualities": [ [ "CUT", 2 ], [ "CUT_FINE", 3 ], [ "BUTCHER", 8 ], [ "FABRIC_CUT", 1 ] ],
     "flags": [ "FRAGILE_MELEE" ]
   },
   {
@@ -154,8 +120,8 @@
     "category": "tools",
     "name": { "str": "thermometer" },
     "description": "A plastic thermometer that can read the air temperature.",
-    "weight": "1 g",
-    "volume": "250 ml",
+    "weight": "10 g",
+    "volume": "25 ml",
     "price": 100,
     "price_postapoc": 10,
     "to_hit": -3,

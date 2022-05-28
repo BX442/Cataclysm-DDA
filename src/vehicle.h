@@ -284,7 +284,7 @@ struct vehicle_part {
          */
         double consume_energy( const itype_id &ftype, double energy_j );
 
-        /* @retun true if part in current state be reloaded optionally with specific itype_id */
+        /* @return true if part in current state be reloaded optionally with specific itype_id */
         bool can_reload( const item &obj = item() ) const;
 
         /**
@@ -293,7 +293,7 @@ struct vehicle_part {
          * @param pos Position of this part for item::process
          * @param e_heater Engine has a heater and is on
          */
-        void process_contents( const tripoint &pos, bool e_heater );
+        void process_contents( map &here, const tripoint &pos, bool e_heater );
 
         /**
          *  Try adding @param liquid to tank optionally limited by @param qty
@@ -400,11 +400,15 @@ struct vehicle_part {
 
         /** Current part damage in same units as item::damage. */
         int damage() const;
+        /** Current part degradation of part base */
+        int degradation() const;
         /** max damage of part base */
         int max_damage() const;
+        /** Current damage floor of the part base */
+        int damage_floor( bool allow_negative ) const;
 
         /** Current part damage level in same units as item::damage_level */
-        int damage_level() const;
+        int damage_level( int dmg = INT_MIN ) const;
 
         /** Current part damage as a percentage of maximum, with 0.0 being perfect condition */
         double damage_percent() const;
@@ -781,7 +785,8 @@ class vehicle
         template <typename Func, typename Vehicle>
         static int traverse_vehicle_graph( Vehicle *start_veh, int amount, Func action );
     public:
-        explicit vehicle( const vproto_id &type_id, int init_veh_fuel = -1, int init_veh_status = -1 );
+        vehicle( map &placed_on, const vproto_id &type_id, int init_veh_fuel = -1,
+                 int init_veh_status = -1, bool may_spawn_locked = false );
         vehicle();
         vehicle( const vehicle & ) = delete;
         ~vehicle();
@@ -799,7 +804,7 @@ class vehicle
          * Set stat for part constrained by range [0,durability]
          * @note does not invoke base @ref item::on_damage callback
          */
-        void set_hp( vehicle_part &pt, int qty );
+        void set_hp( vehicle_part &pt, int qty, bool keep_degradation, int new_degradation = -1 );
 
         /**
          * Apply damage to part constrained by range [0,durability] possibly destroying it
@@ -816,7 +821,7 @@ class vehicle
         bool remote_controlled( const Character &p ) const;
 
         // init parts state for randomly generated vehicle
-        void init_state( int init_veh_fuel, int init_veh_status );
+        void init_state( map &placed_on, int init_veh_fuel, int init_veh_status, bool may_spawn_locked );
 
         // damages all parts of a vehicle by a random amount
         void smash( map &m, float hp_percent_loss_min = 0.1f, float hp_percent_loss_max = 1.2f,
@@ -873,7 +878,7 @@ class vehicle
         bool has_old_owner() const {
             return !old_owner.is_null();
         }
-        bool handle_potential_theft( Character &you, bool check_only = false, bool prompt = true );
+        bool handle_potential_theft( Character const &you, bool check_only = false, bool prompt = true );
         // project a tileray forward to predict obstacles
         std::set<point> immediate_path( const units::angle &rotate = 0_degrees );
         std::set<point> collision_check_points; // NOLINT(cata-serialize)
@@ -892,6 +897,10 @@ class vehicle
          *  @param pos location of physical controls to operate (ignored during remote operation)
          */
         void use_controls( const tripoint &pos );
+
+        item init_cord( const tripoint &pos );
+        void plug_in( const tripoint &pos );
+        void connect( const tripoint &source_pos, const tripoint &target_pos );
 
         // Fold up the vehicle
         bool fold_up();
@@ -934,6 +943,8 @@ class vehicle
                                          bool do_not_rack = false );
         // merge a previously found single tile vehicle into this vehicle
         bool merge_rackable_vehicle( vehicle *carry_veh, const std::vector<int> &rack_parts );
+        // merges vehicles together by copying parts, does not account for any vehicle complexities
+        bool merge_vehicle_parts( vehicle *veh );
 
         /**
          * @param handler A class that receives various callbacks, e.g. for placing items.
@@ -954,6 +965,7 @@ class vehicle
         // split the current vehicle into up to four vehicles if they have no connection other
         // than the structure part at exclude
         bool find_and_split_vehicles( int exclude );
+        bool find_and_split_vehicles( std::set<int> exclude );
         // relocate passengers to the same part on a new vehicle
         void relocate_passengers( const std::vector<Character *> &passengers );
         // remove a bunch of parts, specified by a vector indices, and move them to a new vehicle at
@@ -1177,6 +1189,11 @@ class vehicle
          */
         std::map<itype_id, int> fuels_left() const;
 
+        /**
+         * All the individual fuel items that are in all the tanks in the vehicle.
+        */
+        std::list<item *> fuel_items_left();
+
         // Checks how much certain fuel left in tanks.
         int fuel_left( const itype_id &ftype, bool recurse = false,
                        const std::function<bool( const vehicle_part & )> &filter = return_true<const vehicle_part &> )
@@ -1185,9 +1202,12 @@ class vehicle
         int fuel_left( int p, bool recurse = false ) const;
         // Checks how much of an engine's current fuel is left in the tanks.
         int engine_fuel_left( int e, bool recurse = false ) const;
+        // Returns what type of fuel an engine uses
+        itype_id engine_fuel_current( int e ) const;
+        // Returns total vehicle fuel capacity for the given fuel type
         int fuel_capacity( const itype_id &ftype ) const;
 
-        // Returns the total specific energy of this fuel type. Frozen is ignored.
+        // Returns the total specific energy (J/g) of this fuel type. Frozen is ignored.
         float fuel_specific_energy( const itype_id &ftype ) const;
 
         // drains a fuel type (e.g. for the kitchen unit)
@@ -1553,9 +1573,11 @@ class vehicle
         // Generates starting items in the car, should only be called when placed on the map
         void place_spawn_items();
 
+        void place_zones( map &pmap ) const;
+
         void gain_moves();
 
-        // if its a summoned vehicle - its gotta dissappear at some point, return true if destroyed
+        // if its a summoned vehicle - its gotta disappear at some point, return true if destroyed
         bool decrement_summon_timer();
 
         // reduces velocity to 0
@@ -1670,7 +1692,7 @@ class vehicle
         * @return items that provide consumed charges
         */
         std::list<item> use_charges( const vpart_position &vp, const itype_id &type, int &quantity,
-                                     const std::function<bool( const item & )> &filter );
+                                     const std::function<bool( const item & )> &filter, bool in_tools = false );
 
         // opens/closes doors or multipart doors
         void open( int part_index );
@@ -1804,7 +1826,7 @@ class vehicle
         void clear_bike_racks( std::vector<int> &racks );
         void use_harness( int part, const tripoint &pos );
 
-        void interact_with( const vpart_position &vp );
+        void interact_with( const vpart_position &vp, bool with_pickup = false );
 
         std::string disp_name() const;
 
@@ -1814,7 +1836,7 @@ class vehicle
         // Called by map.cpp to make sure the real position of each zone_data is accurate
         bool refresh_zones();
 
-        bounding_box get_bounding_box();
+        bounding_box get_bounding_box( bool use_precalc = true );
         // Retroactively pass time spent outside bubble
         // Funnels, solar panels
         void update_time( const time_point &update_to );
@@ -1842,7 +1864,7 @@ class vehicle
         /**
         * checks carried_vehicles param for duplicate entries of bike racks/vehicle parts
         * this eliminates edge cases caused by overlapping bike_rack lanes
-        * @param carried_vehicles is a set of either vehicle_parts or bike_racks that need duplicate entries accross the vector<vector>s rows removed
+        * @param carried_vehicles is a set of either vehicle_parts or bike_racks that need duplicate entries across the vector<vector>s rows removed
         */
         void validate_carried_vehicles( std::vector<std::vector<int>>
                                         &carried_vehicles );
@@ -1915,6 +1937,9 @@ class vehicle
         // SC config. optional, as majority of vehicles don't have SC installed
         cata::optional<smart_controller_config> smart_controller_cfg = cata::nullopt;
         bool has_enabled_smart_controller = false; // NOLINT(cata-serialize)
+
+        void add_tag( std::string tag );
+        bool has_tag( std::string tag ) const;
 
     private:
         mutable units::mass mass_cache; // NOLINT(cata-serialize)

@@ -12,6 +12,17 @@
 #include "ret_val.h"
 #include "type_id.h"
 
+static const mtype_id debug_mon( "debug_mon" );
+static const mtype_id mon_zombie_smoker( "mon_zombie_smoker" );
+static const mtype_id mon_zombie_soldier_no_weakpoints( "mon_zombie_soldier_no_weakpoints" );
+static const mtype_id mon_zombie_survivor_no_weakpoints( "mon_zombie_survivor_no_weakpoints" );
+
+static const skill_id skill_bashing( "bashing" );
+static const skill_id skill_cutting( "cutting" );
+static const skill_id skill_melee( "melee" );
+static const skill_id skill_stabbing( "stabbing" );
+static const skill_id skill_unarmed( "unarmed" );
+
 struct itype;
 
 // Run a large number of trials of a player attacking a monster with a given weapon,
@@ -108,14 +119,14 @@ TEST_CASE( "effective damage per second", "[effective][dps]" )
     item good_sword( "test_balanced_sword" );
 
     SECTION( "against a debug monster with no armor or dodge" ) {
-        monster mummy( mtype_id( "debug_mon" ) );
+        monster mummy( debug_mon );
 
         CHECK( clumsy_sword.effective_dps( dummy, mummy ) == Approx( 25.0f ).epsilon( 0.15f ) );
         CHECK( good_sword.effective_dps( dummy, mummy ) == Approx( 38.0f ).epsilon( 0.15f ) );
     }
 
     SECTION( "against an agile target" ) {
-        monster smoker( mtype_id( "mon_zombie_smoker" ) );
+        monster smoker( mon_zombie_smoker );
         REQUIRE( smoker.get_dodge() >= 4 );
 
         CHECK( clumsy_sword.effective_dps( dummy, smoker ) == Approx( 11.0f ).epsilon( 0.15f ) );
@@ -123,14 +134,14 @@ TEST_CASE( "effective damage per second", "[effective][dps]" )
     }
 
     SECTION( "against an armored target" ) {
-        monster soldier( mtype_id( "mon_zombie_soldier_no_weakpoints" ) );
+        monster soldier( mon_zombie_soldier_no_weakpoints );
 
         CHECK( clumsy_sword.effective_dps( dummy, soldier ) == Approx( 8.0f ).epsilon( 0.15f ) );
         CHECK( good_sword.effective_dps( dummy, soldier ) == Approx( 15.0f ).epsilon( 0.15f ) );
     }
 
     SECTION( "effect of STR and DEX on damage per second" ) {
-        monster mummy( mtype_id( "debug_mon" ) );
+        monster mummy( debug_mon );
 
         SECTION( "STR 6, DEX 6" ) {
             dummy.str_max = 6;
@@ -166,9 +177,9 @@ TEST_CASE( "effective vs actual damage per second", "[actual][dps][!mayfail]" )
     avatar &dummy = get_avatar();
     clear_character( dummy );
 
-    monster soldier( mtype_id( "mon_zombie_soldier_no_weakpoints" ) );
-    monster smoker( mtype_id( "mon_zombie_smoker" ) );
-    monster survivor( mtype_id( "mon_zombie_survivor" ) );
+    monster soldier( mon_zombie_soldier_no_weakpoints );
+    monster smoker( mon_zombie_smoker );
+    monster survivor( mon_zombie_survivor_no_weakpoints );
 
     item clumsy_sword( "test_clumsy_sword" );
     item normal_sword( "test_normal_sword" );
@@ -198,9 +209,9 @@ TEST_CASE( "accuracy increases success", "[accuracy][dps]" )
     avatar &dummy = get_avatar();
     clear_character( dummy );
 
-    monster soldier( mtype_id( "mon_zombie_soldier_no_weakpoints" ) );
-    monster smoker( mtype_id( "mon_zombie_smoker" ) );
-    monster survivor( mtype_id( "mon_zombie_survivor" ) );
+    monster soldier( mon_zombie_soldier_no_weakpoints );
+    monster smoker( mon_zombie_smoker );
+    monster survivor( mon_zombie_survivor_no_weakpoints );
 
     item clumsy_sword( "test_clumsy_sword" );
     item normal_sword( "test_normal_sword" );
@@ -236,20 +247,20 @@ static void make_experienced_tester( avatar &test_guy )
     test_guy.set_body();
     test_guy.set_all_parts_hp_to_max();
 
-    test_guy.set_skill_level( skill_id( "bashing" ), 4 );
-    test_guy.set_skill_level( skill_id( "cutting" ), 4 );
-    test_guy.set_skill_level( skill_id( "stabbing" ), 4 );
-    test_guy.set_skill_level( skill_id( "unarmed" ), 4 );
-    test_guy.set_skill_level( skill_id( "melee" ), 4 );
+    test_guy.set_skill_level( skill_bashing, 4 );
+    test_guy.set_skill_level( skill_cutting, 4 );
+    test_guy.set_skill_level( skill_stabbing, 4 );
+    test_guy.set_skill_level( skill_unarmed, 4 );
+    test_guy.set_skill_level( skill_melee, 4 );
 
     REQUIRE( test_guy.get_str() == 10 );
     REQUIRE( test_guy.get_dex() == 10 );
     REQUIRE( test_guy.get_per() == 10 );
-    REQUIRE( test_guy.get_skill_level( skill_id( "bashing" ) ) == 4 );
-    REQUIRE( test_guy.get_skill_level( skill_id( "cutting" ) ) == 4 );
-    REQUIRE( test_guy.get_skill_level( skill_id( "stabbing" ) ) == 4 );
-    REQUIRE( test_guy.get_skill_level( skill_id( "unarmed" ) ) == 4 );
-    REQUIRE( test_guy.get_skill_level( skill_id( "melee" ) ) == 4 );
+    REQUIRE( test_guy.get_skill_level( skill_bashing ) == 4 );
+    REQUIRE( test_guy.get_skill_level( skill_cutting ) == 4 );
+    REQUIRE( test_guy.get_skill_level( skill_stabbing ) == 4 );
+    REQUIRE( test_guy.get_skill_level( skill_unarmed ) == 4 );
+    REQUIRE( test_guy.get_skill_level( skill_melee ) == 4 );
 }
 /*
  * A super tedious set of test cases to make sure that weapon values do not drift too far out
@@ -259,12 +270,12 @@ static void make_experienced_tester( avatar &test_guy )
 static void check_staves( const std::function<Approx( const std::string & )> &calc_expected_dps )
 {
     SECTION( "staves" ) { // typical value around 18
-        CHECK( calc_expected_dps( "i_staff" ) == 22.75 );
-        CHECK( calc_expected_dps( "staff_sling" ) == 15 );
-        CHECK( calc_expected_dps( "q_staff" ) == 20.75 );
+        CHECK( calc_expected_dps( "i_staff" ) == 20.62 );
+        CHECK( calc_expected_dps( "staff_sling" ) == 11.56 );
+        CHECK( calc_expected_dps( "q_staff" ) == 14.11 );
         CHECK( calc_expected_dps( "l-stick_on" ) == 17.5 );
         CHECK( calc_expected_dps( "l-stick" ) == 17.5 );
-        CHECK( calc_expected_dps( "shock_staff" ) == 21.75 );
+        CHECK( calc_expected_dps( "shock_staff" ) == 19.61 );
         CHECK( calc_expected_dps( "hockey_stick" ) == 13.75 );
         CHECK( calc_expected_dps( "pool_cue" ) == 10.0 );
         CHECK( calc_expected_dps( "broom" ) == 3.25 );
@@ -364,17 +375,13 @@ static void check_fist_weapons( const std::function<Approx( const std::string & 
         CHECK( calc_expected_dps( "bagh_nakha" ) == 14.0 );
         CHECK( calc_expected_dps( "punch_dagger" ) == 11.0 );
         CHECK( calc_expected_dps( "knuckle_katar" ) == 10.5 );
-        CHECK( calc_expected_dps( "knuckle_steel" ) == 4.0 );
-        CHECK( calc_expected_dps( "knuckle_brass" ) == 4.0 );
-        CHECK( calc_expected_dps( "knuckle_nail" ) == 4.0 );
-        CHECK( calc_expected_dps( "cestus" ) == 3.0 );
     }
 }
 
 static void check_axes( const std::function<Approx( const std::string & )> &calc_expected_dps )
 {
     SECTION( "axes" ) { // expected value around 27 but no dedicated weapons
-        CHECK( calc_expected_dps( "hatchet" ) == 24.0 );
+        CHECK( calc_expected_dps( "hatchet" ) == 18.0 );
         CHECK( calc_expected_dps( "crash_axe" ) == 24.0 );
         CHECK( calc_expected_dps( "iceaxe" ) == 19.0 );
         CHECK( calc_expected_dps( "throwing_axe" ) == 14.0 );
@@ -414,8 +421,8 @@ static void check_clubs( const std::function<Approx( const std::string & )> &cal
         CHECK( calc_expected_dps( "claw_bar" ) == 11.0 );
         CHECK( calc_expected_dps( "shovel" ) == 10.25 );
         CHECK( calc_expected_dps( "e_tool" ) == 11.0 );
-        CHECK( calc_expected_dps( "sword_nail" ) == 11.0 );
-        CHECK( calc_expected_dps( "sword_wood" ) == 10.5 );
+        CHECK( calc_expected_dps( "sword_nail" ) == 10.25 );
+        CHECK( calc_expected_dps( "sword_wood" ) == 8.5 );
         CHECK( calc_expected_dps( "cane" ) == 10.5 );
         CHECK( calc_expected_dps( "cudgel" ) == 10.5 );
         CHECK( calc_expected_dps( "primitive_hammer" ) == 10.0 );
@@ -438,16 +445,16 @@ static void check_two_handed_swords( const std::function<Approx( const std::stri
         CHECK( calc_expected_dps( "nodachi" ) == 26.5 );
         CHECK( calc_expected_dps( "zweihander" ) == 27.0 );
         CHECK( calc_expected_dps( "estoc" ) == 27.0 );
-        CHECK( calc_expected_dps( "longsword" ) == 24.25 );
+        CHECK( calc_expected_dps( "longsword" ) == 25 );
         CHECK( calc_expected_dps( "katana" ) == 25.0 );
-        CHECK( calc_expected_dps( "longsword_inferior" ) == 18.5 );
+        CHECK( calc_expected_dps( "longsword_inferior" ) == 15.5 );
         CHECK( calc_expected_dps( "zweihander_inferior" ) == 15.5 );
         CHECK( calc_expected_dps( "katana_inferior" ) == 13.5 );
         CHECK( calc_expected_dps( "nodachi_inferior" ) == 16.25 );
         CHECK( calc_expected_dps( "estoc_inferior" ) == 15.5 );
         CHECK( calc_expected_dps( "estoc_fake" ) == 10.0 );
         CHECK( calc_expected_dps( "zweihander_fake" ) == 9.5 );
-        CHECK( calc_expected_dps( "longsword_fake" ) == 9.0 );
+        CHECK( calc_expected_dps( "longsword_fake" ) == 6.25 );
         CHECK( calc_expected_dps( "nodachi_fake" ) == 8.5 );
         CHECK( calc_expected_dps( "katana_fake" ) == 7.0 );
     }
@@ -491,7 +498,7 @@ static void check_shortswords( const std::function<Approx( const std::string & )
         CHECK( calc_expected_dps( "sword_cane" ) == 17.5 );
         CHECK( calc_expected_dps( "cutlass_inferior" ) == 17.5 );
         CHECK( calc_expected_dps( "scimitar_inferior" ) == 14.5 );
-        CHECK( calc_expected_dps( "sword_crude" ) == 14.0 );
+        CHECK( calc_expected_dps( "sword_crude" ) == 9.5 );
         CHECK( calc_expected_dps( "wakizashi_inferior" ) == 15.0 );
         CHECK( calc_expected_dps( "makeshift_machete" ) == 11.0 );
         CHECK( calc_expected_dps( "cavalry_sabre_fake" ) == 7.5 );
@@ -521,10 +528,10 @@ static void check_knives( const std::function<Approx( const std::string & )> &ca
         CHECK( calc_expected_dps( "knife_hunting" ) == 11.0 );
         CHECK( calc_expected_dps( "kirpan_cheap" ) == 10.5 );
         CHECK( calc_expected_dps( "switchblade" ) == 10.5 );
-        CHECK( calc_expected_dps( "knife_meat_cleaver" ) == 8.5 );
+        CHECK( calc_expected_dps( "knife_meat_cleaver" ) == 14.5 );
         CHECK( calc_expected_dps( "diveknife" ) == 8.0 );
         CHECK( calc_expected_dps( "copper_knife" ) == 8.0 );
-        CHECK( calc_expected_dps( "knife_butcher" ) == 7.5 );
+        CHECK( calc_expected_dps( "knife_butcher" ) == 10 );
         CHECK( calc_expected_dps( "throwing_knife" ) == 7.0 );
         CHECK( calc_expected_dps( "tanto_fake" ) == 7.5 );
         CHECK( calc_expected_dps( "pockknife" ) == 4.5 );

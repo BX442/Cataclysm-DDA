@@ -157,7 +157,7 @@ struct uilist_entry {
         uilist_entry( static_cast<int>( e ), std::forward<Args>( args )... )
     {}
 
-    inclusive_rectangle<point> drawn_rect;
+    cata::optional<inclusive_rectangle<point>> drawn_rect;
 };
 
 /**
@@ -267,6 +267,11 @@ class uilist // NOLINT(cata-xy)
         void color_error( bool report );
 
         void init();
+
+        // Calculate sizes, populate arrays
+        void calc_data();
+
+        // Calls calc_data() and initialize the window
         void setup();
         // initialize the window or reposition it after screen size change.
         void reposition( ui_adaptor &ui );
@@ -428,6 +433,8 @@ class uilist // NOLINT(cata-xy)
 
     private:
         report_color_error _color_error = report_color_error::yes;
+        input_context create_main_input_context() const;
+        input_context create_filter_input_context() const;
 
     public:
         // Iternal states
@@ -466,7 +473,7 @@ class uilist // NOLINT(cata-xy)
 
         bool started = false;
 
-        uilist_entry *find_entry_by_coordinate( const point &p );
+        int find_entry_by_coordinate( const point &p ) const;
 
     public:
         // Results

@@ -9,6 +9,7 @@
 #include "debug.h"
 #include "generic_factory.h"
 #include "json.h"
+#include "localized_comparator.h"
 #include "enums.h"
 
 const float book_proficiency_bonus::default_time_factor = 0.5f;
@@ -18,6 +19,7 @@ const bool book_proficiency_bonus::default_include_prereqs = true;
 namespace
 {
 generic_factory<proficiency> proficiency_factory( "proficiency" );
+generic_factory<proficiency_category> proficiency_category_factory( "proficiency category" );
 } // namespace
 
 template<>
@@ -30,6 +32,18 @@ template<>
 bool proficiency_id::is_valid() const
 {
     return proficiency_factory.is_valid( *this );
+}
+
+template<>
+const proficiency_category &proficiency_category_id::obj() const
+{
+    return proficiency_category_factory.obj( *this );
+}
+
+template<>
+bool proficiency_category_id::is_valid() const
+{
+    return proficiency_category_factory.is_valid( *this );
 }
 
 namespace io
@@ -57,6 +71,12 @@ void proficiency::load_proficiencies( const JsonObject &jo, const std::string &s
     proficiency_factory.load( jo, src );
 }
 
+void proficiency_category::load_proficiency_categories( const JsonObject &jo,
+        const std::string &src )
+{
+    proficiency_category_factory.load( jo, src );
+}
+
 void proficiency_bonus::deserialize( const JsonObject &jo )
 {
     mandatory( jo, false, "type", type );
@@ -68,11 +88,17 @@ void proficiency::reset()
     proficiency_factory.reset();
 }
 
+void proficiency_category::reset()
+{
+    proficiency_category_factory.reset();
+}
+
 void proficiency::load( const JsonObject &jo, const std::string & )
 {
     mandatory( jo, was_loaded, "name", _name );
     mandatory( jo, was_loaded, "description", _description );
     mandatory( jo, was_loaded, "can_learn", _can_learn );
+    mandatory( jo, was_loaded, "category", _category );
 
     optional( jo, was_loaded, "default_time_multiplier", _default_time_multiplier );
     optional( jo, was_loaded, "default_fail_multiplier", _default_fail_multiplier );
@@ -85,9 +111,20 @@ void proficiency::load( const JsonObject &jo, const std::string & )
     optional( jo, was_loaded, "bonuses", _bonuses );
 }
 
+void proficiency_category::load( const JsonObject &jo, const std::string & )
+{
+    mandatory( jo, was_loaded, "name", _name );
+    mandatory( jo, was_loaded, "description", _description );
+}
+
 const std::vector<proficiency> &proficiency::get_all()
 {
     return proficiency_factory.get_all();
+}
+
+const std::vector<proficiency_category> &proficiency_category::get_all()
+{
+    return proficiency_category_factory.get_all();
 }
 
 bool proficiency::can_learn() const
@@ -103,6 +140,11 @@ bool proficiency::ignore_focus() const
 proficiency_id proficiency::prof_id() const
 {
     return id;
+}
+
+proficiency_category_id proficiency::prof_category() const
+{
+    return _category;
 }
 
 std::string proficiency::name() const

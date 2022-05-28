@@ -46,15 +46,40 @@ template<typename Point>
 struct directed_path;
 } // namespace pf
 
+generic_factory<city> &get_city_factory();
+
 struct city {
+    void load( const JsonObject &, const std::string & );
+    void check() const;
+    static void load_city( const JsonObject &, const std::string & );
+    static void finalize();
+    static void check_consistency();
+    static const std::vector<city> &get_all();
+    static void reset();
+
+    city_id id;
+    bool was_loaded = false;
+
+    int database_id = 0;
+    // location of the city (in overmap coordinates)
+    point_abs_om pos_om;
     // location of the city (in overmap terrain coordinates)
     point_om_omt pos;
-    int size;
+    // original population
+    int population = 0;
+    int size = -1;
     std::string name;
+
     explicit city( const point_om_omt &P = point_om_omt(), int S = -1 );
 
     explicit operator bool() const {
         return size >= 0;
+    }
+
+    bool operator==( const city &rhs ) const {
+        return id == rhs.id ||
+               database_id == rhs.database_id ||
+               ( pos_om == rhs.pos_om && pos == rhs.pos ) ;
     }
 
     int get_distance_from( const tripoint_om_omt &p ) const;
@@ -68,12 +93,12 @@ struct om_note {
 };
 
 struct om_map_extra {
-    string_id<map_extra> id;
+    map_extra_id id;
     point_om_omt p;
 };
 
 struct om_vehicle {
-    point_om_omt p; // overmap coordinates of tracked vehicle
+    tripoint_om_omt p; // overmap coordinates of tracked vehicle
     std::string name;
 };
 
@@ -165,47 +190,6 @@ class overmap_special_batch
         point_abs_om origin_overmap;
 };
 
-static const std::map<std::string, oter_flags> oter_flags_map = {
-    { "KNOWN_DOWN", oter_flags::known_down },
-    { "KNOWN_UP", oter_flags::known_up },
-    { "RIVER", oter_flags::river_tile },
-    { "SIDEWALK", oter_flags::has_sidewalk },
-    { "NO_ROTATE", oter_flags::no_rotate },
-    { "IGNORE_ROTATION_FOR_ADJACENCY", oter_flags::ignore_rotation_for_adjacency },
-    { "LINEAR", oter_flags::line_drawing },
-    { "SUBWAY", oter_flags::subway_connection },
-    { "REQUIRES_PREDECESSOR", oter_flags::requires_predecessor },
-    { "LAKE", oter_flags::lake },
-    { "LAKE_SHORE", oter_flags::lake_shore },
-    { "RAVINE", oter_flags::ravine },
-    { "RAVINE_EDGE", oter_flags::ravine_edge },
-    { "GENERIC_LOOT", oter_flags::generic_loot },
-    { "RISK_HIGH", oter_flags::risk_high },
-    { "RISK_LOW", oter_flags::risk_low },
-    { "SOURCE_AMMO", oter_flags::source_ammo },
-    { "SOURCE_ANIMALS", oter_flags::source_animals },
-    { "SOURCE_BOOKS", oter_flags::source_books },
-    { "SOURCE_CHEMISTRY", oter_flags::source_chemistry },
-    { "SOURCE_CLOTHING", oter_flags::source_clothing },
-    { "SOURCE_CONSTRUCTION", oter_flags::source_construction },
-    { "SOURCE_COOKING", oter_flags::source_cooking },
-    { "SOURCE_DRINK", oter_flags::source_drink },
-    { "SOURCE_ELECTRONICS", oter_flags::source_electronics },
-    { "SOURCE_FABRICATION", oter_flags::source_fabrication },
-    { "SOURCE_FARMING", oter_flags::source_farming },
-    { "SOURCE_FOOD", oter_flags::source_food },
-    { "SOURCE_FORAGE", oter_flags::source_forage },
-    { "SOURCE_FUEL", oter_flags::source_fuel },
-    { "SOURCE_GUN", oter_flags::source_gun },
-    { "SOURCE_LUXURY", oter_flags::source_luxury },
-    { "SOURCE_MEDICINE", oter_flags::source_medicine },
-    { "SOURCE_PEOPLE", oter_flags::source_people },
-    { "SOURCE_SAFETY", oter_flags::source_safety },
-    { "SOURCE_TAILORING", oter_flags::source_tailoring },
-    { "SOURCE_VEHICLES", oter_flags::source_vehicles },
-    { "SOURCE_WEAPON", oter_flags::source_weapon }
-};
-
 template<typename Tripoint>
 struct pos_dir {
     Tripoint p;
@@ -264,10 +248,12 @@ class overmap
          * chosen place on the overmap with the specific overmap terrain.
          * Returns @ref invalid_tripoint if no suitable place has been found.
          */
-        tripoint_om_omt find_random_omt( const std::pair<std::string, ot_match_type> &target ) const;
+        tripoint_om_omt find_random_omt( const std::pair<std::string, ot_match_type> &target,
+                                         cata::optional<city> target_city = cata::nullopt ) const;
         tripoint_om_omt find_random_omt( const std::string &omt_base_type,
-                                         ot_match_type match_type = ot_match_type::type ) const {
-            return find_random_omt( std::make_pair( omt_base_type, match_type ) );
+                                         ot_match_type match_type = ot_match_type::type,
+                                         cata::optional<city> target_city = cata::nullopt ) const {
+            return find_random_omt( std::make_pair( omt_base_type, match_type ), target_city );
         }
         /**
          * Return a vector containing the absolute coordinates of
@@ -278,7 +264,10 @@ class overmap
         std::vector<point_abs_omt> find_terrain( const std::string &term, int zlevel );
 
         void ter_set( const tripoint_om_omt &p, const oter_id &id );
+        // ter has bounds checking, and returns ot_null when out of bounds.
         const oter_id &ter( const tripoint_om_omt &p ) const;
+        // ter_unsafe is UB when out of bounds.
+        const oter_id &ter_unsafe( const tripoint_om_omt &p ) const;
         cata::optional<mapgen_arguments> *mapgen_args( const tripoint_om_omt & );
         std::string *join_used_at( const om_pos_dir & );
         std::vector<oter_id> predecessors( const tripoint_om_omt & );
@@ -295,8 +284,8 @@ class overmap
         void mark_note_dangerous( const tripoint_om_omt &p, int radius, bool is_dangerous );
 
         bool has_extra( const tripoint_om_omt &p ) const;
-        const string_id<map_extra> &extra( const tripoint_om_omt &p ) const;
-        void add_extra( const tripoint_om_omt &p, const string_id<map_extra> &id );
+        const map_extra_id &extra( const tripoint_om_omt &p ) const;
+        void add_extra( const tripoint_om_omt &p, const map_extra_id &id );
         void delete_extra( const tripoint_om_omt &p );
 
         /**
@@ -380,7 +369,7 @@ class overmap
         void for_each_npc( const std::function<void( const npc & )> &callback ) const;
 
         shared_ptr_fast<npc> find_npc( const character_id &id ) const;
-
+        shared_ptr_fast<npc> find_npc_by_unique_id( const std::string &id ) const;
         const std::vector<shared_ptr_fast<npc>> &get_npcs() const {
             return npcs;
         }
@@ -443,6 +432,8 @@ class overmap
 
         // parse data in an opened overmap file
         void unserialize( std::istream &fin );
+        // parse data in an opened omap file
+        void unserialize_omap( std::istream &fin );
         // Parse per-player overmap view data.
         void unserialize_view( std::istream &fin );
         // Save data in an opened overmap file
@@ -501,7 +492,6 @@ class overmap
         bool build_lab( const tripoint_om_omt &p, int s, std::vector<point_om_omt> *lab_train_points,
                         const std::string &prefix, int train_odds );
         bool build_slimepit( const tripoint_om_omt &origin, int s );
-        void build_mine( const tripoint_om_omt &origin, int s );
         void place_ravines();
 
         // Connection laying

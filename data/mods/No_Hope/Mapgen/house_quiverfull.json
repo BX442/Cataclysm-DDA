@@ -1,17 +1,5 @@
 [
   {
-    "name": "GROUP_QUIVERFULL",
-    "type": "monstergroup",
-    "default": "mon_null",
-    "monsters": [ { "monster": "mon_zombie_child", "freq": 100, "cost_multiplier": 0, "pack_size": [ 6, 10 ] } ]
-  },
-  {
-    "type": "item_group",
-    "id": "book_house_quiverfull_bible",
-    "subtype": "collection",
-    "items": [ { "item": "holybook_bible1", "prob": 100 } ]
-  },
-  {
     "type": "mapgen",
     "method": "json",
     "om_terrain": [ "house_quiverfull" ],

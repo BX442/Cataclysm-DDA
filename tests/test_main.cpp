@@ -41,11 +41,12 @@
 #include "overmap.h"
 #include "overmapbuffer.h"
 #include "path_info.h"
-#include "pldata.h"
 #include "rng.h"
 #include "type_id.h"
 #include "weather.h"
 #include "worldfactory.h"
+
+static const mod_id MOD_INFORMATION_dda( "dda" );
 
 using name_value_pair_t = std::pair<std::string, std::string>;
 using option_overrides_t = std::vector<name_value_pair_t>;
@@ -294,8 +295,8 @@ int main( int argc, const char *argv[] )
     std::vector<const char *> arg_vec( argv, argv + argc );
 
     std::vector<mod_id> mods = extract_mod_selection( arg_vec );
-    if( std::find( mods.begin(), mods.end(), mod_id( "dda" ) ) == mods.end() ) {
-        mods.insert( mods.begin(), mod_id( "dda" ) ); // @todo move unit test items to core
+    if( std::find( mods.begin(), mods.end(), MOD_INFORMATION_dda ) == mods.end() ) {
+        mods.insert( mods.begin(), MOD_INFORMATION_dda ); // @todo move unit test items to core
     }
 
     option_overrides_t option_overrides_for_test_suite = extract_option_overrides( arg_vec );

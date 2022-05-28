@@ -10,23 +10,26 @@
 #include "addiction.h"
 #include "avatar.h"
 #include "bionics.h"
+#include "bodygraph.h"
 #include "bodypart.h"
 #include "calendar.h"
 #include "cata_utility.h"
 #include "catacharset.h"
+#include "character.h"
+#include "character_modifier.h"
 #include "color.h"
 #include "cursesdef.h"
 #include "debug.h"
+#include "display.h"
 #include "effect.h"
 #include "enum_conversions.h"
 #include "game.h"
 #include "input.h"
+#include "localized_comparator.h"
 #include "mutation.h"
 #include "options.h"
 #include "output.h"
-#include "panels.h"
 #include "pimpl.h"
-#include "pldata.h"
 #include "profession.h"
 #include "proficiency.h"
 #include "skill.h"
@@ -38,6 +41,21 @@
 #include "units_utility.h"
 #include "weather.h"
 #include "weather_type.h"
+
+static const bionic_id bio_cqb( "bio_cqb" );
+
+static const skill_id skill_bashing( "bashing" );
+static const skill_id skill_cutting( "cutting" );
+static const skill_id skill_dodge( "dodge" );
+static const skill_id skill_melee( "melee" );
+static const skill_id skill_stabbing( "stabbing" );
+static const skill_id skill_unarmed( "unarmed" );
+
+static const trait_id trait_COLDBLOOD4( "COLDBLOOD4" );
+static const trait_id trait_SUNLIGHT_DEPENDENT( "SUNLIGHT_DEPENDENT" );
+static const trait_id trait_TROGLO( "TROGLO" );
+static const trait_id trait_TROGLO2( "TROGLO2" );
+static const trait_id trait_TROGLO3( "TROGLO3" );
 
 static const std::string title_STATS = translate_marker( "STATS" );
 static const std::string title_ENCUMB = translate_marker( "ENCUMBRANCE AND WARMTH" );
@@ -71,7 +89,9 @@ static bool should_combine_bps( const Character &p, const bodypart_id &l, const 
            temperature_print_rescaling( p.get_part_temp_conv( l ) ) == temperature_print_rescaling(
                p.get_part_temp_conv( r ) ) &&
            // selected_clothing covers both or neither parts
-           ( !selected_clothing || ( selected_clothing->covers( l ) == selected_clothing->covers( r ) ) );
+           ( !selected_clothing || ( selected_clothing->covers( l ) == selected_clothing->covers( r ) ) ) &&
+           // they have the same HP
+           p.get_part_hp_cur( l ) == p.get_part_hp_cur( r );
 
 }
 
@@ -175,89 +195,68 @@ void Character::print_encumbrance( const catacurses::window &win, const int line
     draw_scrollbar( win, firstline, height, bps.size(), point( width, 1 ), c_white, true );
 }
 
-static std::string swim_cost_text( float moves )
+static nc_color limb_score_current_color( float cur_score, float bp_score )
 {
-    return string_format( _( "Swimming movement point cost: <color_white>x%.2f</color>\n" ), moves );
+    if( cur_score < bp_score * 0.25 ) {
+        return c_brown;
+    }
+    if( cur_score < bp_score * 0.5 ) {
+        return c_light_red;
+    }
+    if( cur_score < bp_score * 0.8 ) {
+        return c_yellow;
+    }
+    return c_white;
 }
 
-static std::string reload_cost_text( float moves )
+static std::string get_score_text( const std::string &sc_name, float cur_score, float bp_score )
 {
-    return string_format( _( "Reloading movement point cost: <color_white>x%.2f</color>\n" ), moves );
-}
-
-static std::string melee_cost_text( float moves )
-{
-    return string_format(
-               _( "Melee and thrown attack movement point modifier: <color_white>x%.2f</color>\n" ), moves );
-}
-static std::string melee_stamina_cost_text( float cost )
-{
-    return string_format( _( "Melee stamina cost: <color_white>x%.2f</color>\n" ), cost );
-}
-static std::string mouth_stamina_cost_text( float cost )
-{
-    return string_format( _( "Stamina Regeneration: <color_white>x%.2f</color>\n" ), cost );
-}
-static std::string ranged_cost_text( double disp )
-{
-    return string_format( _( "Dispersion when using ranged attacks: <color_white>%+.1f</color>\n" ),
-                          disp );
-}
-
-static std::string get_encumbrance_description( const Character &you, const bodypart_id &bp )
-{
-    std::string s;
-
-    switch( bp->token ) {
-        case bp_torso: {
-            s += string_format( _( "Melee attack rolls: <color_white>x%.2f</color>\n" ),
-                                you.melee_attack_roll_modifier() );
-            s += melee_cost_text( you.melee_thrown_move_modifier_torso() );
-            break;
-        }
-        case bp_head:
-            s += _( "<color_magenta>Head encumbrance has no effect; it simply limits how much you can put on.</color>" );
-            break;
-        case bp_eyes:
-            s += string_format(
-                     _( "Dispersion when throwing or firing: <color_white>x%.2f</color>" ),
-                     you.vision_score() );
-            break;
-        case bp_mouth:
-            s += _( "<color_magenta>Covering your mouth will make it more difficult to breathe and catch your breath.</color>\n" );
-            s += mouth_stamina_cost_text( you.stamina_recovery_breathing_modifier() );
-            break;
-        case bp_arm_l:
-        case bp_arm_r:
-            s += _( "<color_magenta>Arm encumbrance affects stamina cost of melee attacks and accuracy with ranged weapons.</color>\n" );
-            s += melee_stamina_cost_text( you.melee_stamina_cost_modifier() );
-            s += ranged_cost_text( you.ranged_dispersion_modifier_hands() );
-            break;
-        case bp_hand_l:
-        case bp_hand_r:
-            s += _( "<color_magenta>Reduces the speed at which you can handle or manipulate items.</color>\n\n" );
-            s += reload_cost_text( you.reloading_move_modifier() );
-            s += string_format( _( "Dexterity when throwing items: <color_white>x%.2f</color>\n" ),
-                                you.thrown_dex_modifier() );
-            s += melee_cost_text( you.melee_thrown_move_modifier_hands() );
-            s += string_format( _( "Gun aim speed modifier: <color_white>x%.2f</color>" ),
-                                you.aim_speed_modifier() );
-            break;
-        case bp_leg_l:
-        case bp_leg_r:
-            s += string_format( _( "Limb speed movecost modifier: <color_white>x%.2f</color>\n" ),
-                                you.limb_speed_movecost_modifier() );
-            s += swim_cost_text( you.swim_modifier() );
-            break;
-        case bp_foot_l:
-        case bp_foot_r:
-            s += string_format( _( "Balance movecost modifier: <color_white>x%.2f</color>" ),
-                                you.limb_balance_movecost_modifier() );
-            break;
-        case num_bp:
-            break;
+    if( std::abs( bp_score ) <= std::numeric_limits<float>::epsilon() ) {
+        return std::string();
     }
 
+    nc_color score_c = limb_score_current_color( cur_score, bp_score );
+    std::string sc_txt = colorize( string_format( "%.2f (%.f%%)", cur_score,
+                                   cur_score * 100.f / bp_score ), score_c );
+    //~ 1$ = name of the limb score (ex: Balance), 2$ = current score value (colored)
+    return string_format( _( "%1$s score: %2$s" ), sc_name, sc_txt );
+}
+
+static std::vector<std::string> get_encumbrance_description( const Character &you,
+        const bodypart_id &bp )
+{
+    std::vector<std::string> s;
+    const bodypart *part = you.get_part( bp );
+    if( !bp->encumb_text.empty() ) {
+        s.emplace_back( colorize( string_format( _( "Encumbrance effects: %s" ), bp->encumb_text ),
+                                  c_magenta ) );
+    }
+    if( bp->encumb_impacts_dodge && you.is_avatar() ) {
+        int dodge = get_avatar().limb_dodge_encumbrance();
+        nc_color dodge_c = dodge > 10 ? c_light_red : dodge > 5 ? c_yellow : c_white;
+        std::string dodge_str = colorize( string_format( "-%d", dodge ), dodge_c );
+        s.emplace_back( string_format( _( "Encumbrance dodge modifier: %s" ), dodge_str ) );
+    }
+    for( const limb_score &sc : limb_score::get_all() ) {
+        if( !bp->has_limb_score( sc.getId() ) ) {
+            continue;
+        }
+        float cur_score = part->get_limb_score( sc.getId() );
+        float bp_score = bp->get_limb_score( sc.getId() );
+        s.emplace_back( get_score_text( sc.name().translated(), cur_score, bp_score ) );
+    }
+    for( const character_modifier &mod : character_modifier::get_all() ) {
+        for( const auto &sc : mod.use_limb_scores() ) {
+            if( sc.second == 0.0f || sc.first.is_null() || !bp->has_limb_score( sc.first ) ) {
+                continue;
+            }
+            std::string desc = mod.description().translated();
+            std::string valstr = colorize( string_format( "%.2f", mod.modifier( you ) ),
+                                           limb_score_current_color( part->get_limb_score( sc.first ) * sc.second,
+                                                   bp->get_limb_score( sc.first ) * sc.second ) );
+            s.emplace_back( string_format( "%s: %s%s", desc, mod.mod_type_str(), valstr ) );
+        }
+    }
     return s;
 }
 
@@ -267,8 +266,8 @@ static bool is_cqb_skill( const skill_id &id )
     // dependency. Maybe change it into a flag of the skill that indicates it's a skill used
     // by the bionic?
     static const std::array<skill_id, 5> cqb_skills = { {
-            skill_id( "melee" ), skill_id( "unarmed" ), skill_id( "cutting" ),
-            skill_id( "bashing" ), skill_id( "stabbing" ),
+            skill_melee, skill_unarmed, skill_cutting,
+            skill_bashing, skill_stabbing,
         }
     };
     return std::find( cqb_skills.begin(), cqb_skills.end(), id ) != cqb_skills.end();
@@ -307,17 +306,19 @@ static player_display_tab prev_tab( const player_display_tab tab )
 }
 
 static void draw_proficiencies_tab( const catacurses::window &win, const unsigned line,
-                                    const Character &guy, const player_display_tab curtab )
+                                    const Character &guy, const player_display_tab curtab,
+                                    const input_context &ctxt )
 {
     werase( win );
     const std::vector<display_proficiency> profs = guy.display_proficiencies();
     const bool focused = curtab == player_display_tab::proficiencies;
     const nc_color title_color = focused ? h_light_gray : c_light_gray;
-    center_print( win, 0, title_color, _( title_PROFICIENCIES ) );
+    center_print( win, 0, title_color, string_format( "[<color_yellow>%s</color>] %s",
+                  ctxt.get_desc( "VIEW_PROFICIENCIES" ), _( title_PROFICIENCIES ) ) );
 
     const int height = getmaxy( win ) - 1;
     const bool do_draw_scrollbar = height < static_cast<int>( profs.size() );
-    const int width = getmaxx( win ) - 1 - ( do_draw_scrollbar ? 1 : 0 );  // -1 for beggining space
+    const int width = getmaxx( win ) - 1 - ( do_draw_scrollbar ? 1 : 0 );  // -1 for beginning space
 
     const std::pair<const int, const int> range = subindex_around_cursor( profs.size(), height, line,
             focused );
@@ -366,11 +367,13 @@ static void draw_proficiencies_info( const catacurses::window &w_info, const uns
 }
 
 static void draw_stats_tab( const catacurses::window &w_stats, const Character &you,
-                            const unsigned line, const player_display_tab curtab )
+                            const unsigned line, const player_display_tab curtab, const input_context &ctxt )
 {
     werase( w_stats );
     const nc_color title_col = curtab == player_display_tab::stats ? h_light_gray : c_light_gray;
-    center_print( w_stats, 0, title_col, _( title_STATS ) );
+    center_print( w_stats, 0, title_col,
+                  string_format( "[<color_yellow>%s</color>] %s",
+                                 ctxt.get_desc( "VIEW_BODYSTAT" ), _( title_STATS ) ) );
 
     const auto line_color = [curtab, line]( const unsigned line_to_draw ) {
         if( curtab == player_display_tab::stats && line == line_to_draw ) {
@@ -525,7 +528,7 @@ static void draw_encumbrance_tab( const catacurses::window &w_encumb, const Char
 }
 
 static void draw_encumbrance_info( const catacurses::window &w_info, const Character &you,
-                                   const unsigned line )
+                                   const unsigned line, const unsigned info_line )
 {
     const std::vector<std::pair<bodypart_id, bool>> bps = list_and_combine_bps( you, nullptr );
 
@@ -534,9 +537,16 @@ static void draw_encumbrance_info( const catacurses::window &w_info, const Chara
     if( line < bps.size() ) {
         bp = bps[line].first;
     }
-    const std::string s = get_encumbrance_description( you, bp );
-    // NOLINTNEXTLINE(cata-use-named-point-constants)
-    fold_and_print( w_info, point( 1, 0 ), FULL_SCREEN_WIDTH - 2, c_light_gray, s );
+    const std::vector<std::string> s = get_encumbrance_description( you, bp );
+    const int winh = catacurses::getmaxy( w_info );
+    const bool do_scroll = s.size() > static_cast<unsigned>( std::abs( winh ) );
+    const int winw = FULL_SCREEN_WIDTH - ( do_scroll ? 3 : 2 );
+    const int fline = do_scroll ? info_line % ( s.size() + 1 - winh ) : 0;
+    const int lline = do_scroll ? fline + winh : s.size();
+    for( int i = fline; i < lline; i++ ) {
+        trim_and_print( w_info, point( 1, i - fline ), winw, c_light_gray, s[i] );
+    }
+    draw_scrollbar( w_info, fline, winh, s.size(), point( winw, 0 ), c_white, true );
     wnoutrefresh( w_info );
 }
 
@@ -720,7 +730,7 @@ static void draw_skills_tab( const catacurses::window &w_skills,
             int exercise = level.exercise();
             int level_num = level.level();
             bool locked = false;
-            if( you.has_active_bionic( bionic_id( "bio_cqb" ) ) && is_cqb_skill( aSkill->ident() ) ) {
+            if( you.has_active_bionic( bio_cqb ) && is_cqb_skill( aSkill->ident() ) ) {
                 level_num = 5;
                 exercise = 0;
                 locked = true;
@@ -751,7 +761,7 @@ static void draw_skills_tab( const catacurses::window &w_skills,
                 mvwprintz( w_skills, point( 1, y_pos ), c_light_gray, std::string( col_width, ' ' ) );
             }
             mvwprintz( w_skills, point( 1, y_pos ), cstatus, "%s:", aSkill->name() );
-            if( aSkill->ident() == skill_id( "dodge" ) ) {
+            if( aSkill->ident() == skill_dodge ) {
                 mvwprintz( w_skills, point( 14, y_pos ), cstatus, "%4.1f/%-2d(%2d%%)",
                            you.get_dodge(),
                            level_num,
@@ -814,7 +824,7 @@ static void draw_speed_tab( const catacurses::window &w_speed,
     int pen = 0;
     unsigned int line = 3;
     if( you.weight_carried() > you.weight_capacity() ) {
-        pen = 25 * ( you.weight_carried() - you.weight_capacity() ) / ( you.weight_capacity() );
+        pen = 25 * ( you.weight_carried() - you.weight_capacity() ) / you.weight_capacity();
         mvwprintz( w_speed, point( 1, line ), c_red,
                    pgettext( "speed penalty", "Overburdened        -%2d%%" ), pen );
         ++line;
@@ -840,7 +850,7 @@ static void draw_speed_tab( const catacurses::window &w_speed,
                    left_justify( inanition, 20 ), pen );
         ++line;
     }
-    if( you.has_trait( trait_id( "SUNLIGHT_DEPENDENT" ) ) && !g->is_in_sunlight( you.pos() ) ) {
+    if( you.has_trait( trait_SUNLIGHT_DEPENDENT ) && !g->is_in_sunlight( you.pos() ) ) {
         pen = ( g->light_level( you.posz() ) >= 12 ? 5 : 10 );
         mvwprintz( w_speed, point( 1, line ), c_red,
                    pgettext( "speed penalty", "Out of Sunlight     -%2d%%" ), pen );
@@ -852,7 +862,7 @@ static void draw_speed_tab( const catacurses::window &w_speed,
         nc_color pen_color;
         std::string pen_sign;
         const int player_local_temp = get_weather().get_temperature( you.pos() );
-        if( you.has_trait( trait_id( "COLDBLOOD4" ) ) && player_local_temp > 65 ) {
+        if( you.has_trait( trait_COLDBLOOD4 ) && player_local_temp > 65 ) {
             pen_color = c_green;
             pen_sign = "+";
         } else if( player_local_temp < 65 ) {
@@ -896,7 +906,7 @@ static void draw_speed_tab( const catacurses::window &w_speed,
 }
 
 static void draw_info_window( const catacurses::window &w_info, const Character &you,
-                              const unsigned line, const player_display_tab curtab,
+                              const unsigned line, const unsigned info_line, const player_display_tab curtab,
                               const std::vector<trait_id> &traitslist,
                               const std::vector<bionic> &bionicslist,
                               const std::vector<std::pair<std::string, std::string>> &effect_name_and_text,
@@ -907,7 +917,7 @@ static void draw_info_window( const catacurses::window &w_info, const Character 
             draw_stats_info( w_info, you, line );
             break;
         case player_display_tab::encumbrance:
-            draw_encumbrance_info( w_info, you, line );
+            draw_encumbrance_info( w_info, you, line, info_line );
             break;
         case player_display_tab::skills:
             draw_skills_info( w_info, you, line, skillslist );
@@ -957,7 +967,7 @@ static void draw_tip( const catacurses::window &w_tip, const Character &you,
 
     if( customize_character ) {
         right_print( w_tip, 0, 8, c_light_gray, string_format(
-                         _( "[<color_yellow>%s</color>]Customize character" ),
+                         _( "[<color_yellow>%s</color>] Customize character" ),
                          ctxt.get_desc( "SWITCH_GENDER" ) ) );
     }
 
@@ -971,6 +981,7 @@ static void draw_tip( const catacurses::window &w_tip, const Character &you,
 }
 
 static bool handle_player_display_action( Character &you, unsigned int &line,
+        unsigned int &info_line,
         player_display_tab &curtab, input_context &ctxt, const ui_adaptor &ui_tip,
         const ui_adaptor &ui_info, const ui_adaptor &ui_stats, const ui_adaptor &ui_encumb,
         const ui_adaptor &ui_traits, const ui_adaptor &ui_bionics, const ui_adaptor &ui_effects,
@@ -1055,6 +1066,7 @@ static bool handle_player_display_action( Character &you, unsigned int &line,
         if( curtab == player_display_tab::skills && skillslist[line].is_header ) {
             --line;
         }
+        info_line = 0;
         invalidate_tab( curtab );
         ui_info.invalidate_ui();
     } else if( action == "DOWN" ) {
@@ -1066,6 +1078,7 @@ static bool handle_player_display_action( Character &you, unsigned int &line,
         if( curtab == player_display_tab::skills && skillslist[line].is_header ) {
             ++line;
         }
+        info_line = 0;
         invalidate_tab( curtab );
         ui_info.invalidate_ui();
     } else if( action == "NEXT_TAB" || action == "PREV_TAB" ) {
@@ -1073,6 +1086,7 @@ static bool handle_player_display_action( Character &you, unsigned int &line,
         invalidate_tab( curtab );
         curtab = action == "NEXT_TAB" ? next_tab( curtab ) : prev_tab( curtab );
         invalidate_tab( curtab );
+        info_line = 0;
         ui_info.invalidate_ui();
     } else if( action == "QUIT" ) {
         done = true;
@@ -1097,6 +1111,9 @@ static bool handle_player_display_action( Character &you, unsigned int &line,
                 invalidate_tab( curtab );
                 break;
             }
+            case player_display_tab::proficiencies:
+                show_proficiencies_window( you );
+                break;
         }
     } else if( action == "CHANGE_PROFESSION_NAME" ) {
         string_input_popup popup;
@@ -1108,6 +1125,10 @@ static bool handle_player_display_action( Character &you, unsigned int &line,
 
         you.custom_profession = popup.text();
         ui_tip.invalidate_ui();
+    } else if( action == "VIEW_PROFICIENCIES" ) {
+        show_proficiencies_window( you );
+    } else if( action == "VIEW_BODYSTAT" ) {
+        display_bodygraph( you );
     } else if( customize_character && action == "SWITCH_GENDER" ) {
         uilist cmenu;
         cmenu.title = _( "Customize Character" );
@@ -1133,6 +1154,16 @@ static bool handle_player_display_action( Character &you, unsigned int &line,
                 }
             }
         }
+    } else if( action == "SCROLL_INFOBOX_UP" ) {
+        if( info_line > 0 ) {
+            --info_line;
+            ui_info.invalidate_ui();
+        }
+    } else if( action == "SCROLL_INFOBOX_DOWN" ) {
+        ++info_line;
+        ui_info.invalidate_ui();
+    } else if( action == "MEDICAL_MENU" ) {
+        you.as_avatar()->disp_medical();
     }
     return done;
 }
@@ -1224,18 +1255,18 @@ void Character::disp_info( bool customize_character )
         effect_name_and_text.emplace_back( starvation_name, starvation_text );
     }
 
-    if( has_trait( trait_id( "TROGLO" ) ) && g->is_in_sunlight( pos() ) &&
+    if( has_trait( trait_TROGLO ) && g->is_in_sunlight( pos() ) &&
         get_weather().weather_id->sun_intensity >= sun_intensity_type::high ) {
         effect_name_and_text.emplace_back( _( "In Sunlight" ),
                                            _( "The sunlight irritates you.\n"
                                               "Strength - 1;    Dexterity - 1;    Intelligence - 1;    Perception - 1" )
                                          );
-    } else if( has_trait( trait_id( "TROGLO2" ) ) && g->is_in_sunlight( pos() ) ) {
+    } else if( has_trait( trait_TROGLO2 ) && g->is_in_sunlight( pos() ) ) {
         effect_name_and_text.emplace_back( _( "In Sunlight" ),
                                            _( "The sunlight irritates you badly.\n"
                                               "Strength - 2;    Dexterity - 2;    Intelligence - 2;    Perception - 2" )
                                          );
-    } else if( has_trait( trait_id( "TROGLO3" ) ) && g->is_in_sunlight( pos() ) ) {
+    } else if( has_trait( trait_TROGLO3 ) && g->is_in_sunlight( pos() ) ) {
         effect_name_and_text.emplace_back( _( "In Sunlight" ),
                                            _( "The sunlight irritates you terribly.\n"
                                               "Strength - 4;    Dexterity - 4;    Intelligence - 4;    Perception - 4" )
@@ -1244,7 +1275,8 @@ void Character::disp_info( bool customize_character )
 
     for( auto &elem : addictions ) {
         if( elem.sated < 0_turns && elem.intensity >= MIN_ADDICTION_LEVEL ) {
-            effect_name_and_text.emplace_back( addiction_name( elem ), addiction_text( elem ) );
+            effect_name_and_text.emplace_back( elem.type->get_name().translated(),
+                                               elem.type->get_description().translated() );
         }
     }
 
@@ -1307,7 +1339,12 @@ void Character::disp_info( bool customize_character )
     ctxt.register_action( "CONFIRM", to_translation( "Toggle skill training / Upgrade stat" ) );
     ctxt.register_action( "CHANGE_PROFESSION_NAME", to_translation( "Change profession name" ) );
     ctxt.register_action( "SWITCH_GENDER", to_translation( "Customize base appearance and name" ) );
+    ctxt.register_action( "VIEW_PROFICIENCIES", to_translation( "View character proficiencies" ) );
+    ctxt.register_action( "VIEW_BODYSTAT", to_translation( "View character's body status" ) );
+    ctxt.register_action( "SCROLL_INFOBOX_UP", to_translation( "Scroll information box up" ) );
+    ctxt.register_action( "SCROLL_INFOBOX_DOWN", to_translation( "Scroll information box down" ) );
     ctxt.register_action( "HELP_KEYBINDINGS" );
+    ctxt.register_action( "MEDICAL_MENU" );
 
     std::map<std::string, int> speed_effects;
     for( auto &elem : *effects ) {
@@ -1326,6 +1363,7 @@ void Character::disp_info( bool customize_character )
 
     player_display_tab curtab = player_display_tab::stats;
     unsigned int line = 0;
+    unsigned int info_line = 0;
 
     catacurses::window w_tip;
     ui_adaptor ui_tip;
@@ -1360,7 +1398,7 @@ void Character::disp_info( bool customize_character )
     ui_stats.on_redraw( [&]( const ui_adaptor & ) {
         borders.draw_border( w_stats_border );
         wnoutrefresh( w_stats_border );
-        draw_stats_tab( w_stats, *this, line, curtab );
+        draw_stats_tab( w_stats, *this, line, curtab, ctxt );
     } );
 
     // TRAITS & BIONICS
@@ -1480,7 +1518,7 @@ void Character::disp_info( bool customize_character )
     ui_proficiencies.on_redraw( [&]( const ui_adaptor & ) {
         borders.draw_border( w_proficiencies_border );
         wnoutrefresh( w_proficiencies_border );
-        draw_proficiencies_tab( w_proficiencies, line, *this, curtab );
+        draw_proficiencies_tab( w_proficiencies, line, *this, curtab, ctxt );
     } );
 
     // SKILLS
@@ -1528,7 +1566,7 @@ void Character::disp_info( bool customize_character )
     ui_info.on_redraw( [&]( const ui_adaptor & ) {
         borders.draw_border( w_info_border );
         wnoutrefresh( w_info_border );
-        draw_info_window( w_info, *this, line, curtab,
+        draw_info_window( w_info, *this, line, info_line, curtab,
                           traitslist, bionicslist, effect_name_and_text, skillslist );
     } );
 
@@ -1557,7 +1595,8 @@ void Character::disp_info( bool customize_character )
     do {
         ui_manager::redraw_invalidated();
 
-        done = handle_player_display_action( *this, line, curtab, ctxt, ui_tip, ui_info, ui_stats,
+        done = handle_player_display_action( *this, line, info_line, curtab, ctxt, ui_tip, ui_info,
+                                             ui_stats,
                                              ui_encumb, ui_traits, ui_bionics, ui_effects, ui_skills, ui_proficiencies, traitslist, bionicslist,
                                              effect_name_and_text, skillslist, customize_character );
     } while( !done );
