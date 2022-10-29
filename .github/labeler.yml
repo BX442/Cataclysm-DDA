@@ -1,215 +1,170 @@
-"[C++]":
-  - "**/*.cpp"
-  - "**/*.h"
+- regExp: ".*\\.(cpp|h)+$"
+  labels: ["[C++]"]
 
-"[JSON]":
-  - "**/*.json"
+- regExp: ".*\\.json+$"
+  labels: ["[JSON]"]
 
-"[Markdown]":
-  - "**/*.md"
+- regExp: ".*\\.md+$"
+  labels: ["[Markdown]"]
 
-"Game: Achievements / Conducts / Scores":
-  - "**/scores**"
-  - "**/statistics**"
-  - "**/achievements**"
-  - "**/conducts**"
-  - "**/event_statistics.*"
+- regExp: ".*(scores|statistics|achievements|conducts).*"
+  labels: ["Game: Achievements / Conducts / Scores"]
 
-"[Python]":
-  - "**/*.py"
+- regExp: ".*\\.py+$"
+  labels: ["[Python]"]
 
-"<Documentation>":
-  - "**/*.md"
-  - doc/**/*
-  - doxygen_doc/**/*
+- regExp: ".*(\\.md|doc/|doxygen_doc/).*"
+  labels: ["<Documentation>"]
 
-"Code: Tooling":
-  - tools/**/*
-  - .github/**/*
-  - utilities/**/*
+- regExp: ".*(\\.github/|utilities/|tools/).*"
+  labels: ["Code: Tooling"]
 
-"Code: Tests":
-  - tests/**/*
+- regExp: ".*(tests/|data/mods/TEST_DATA/).*"
+  labels: ["Code: Tests"]
 
-"Character / World Generation":
-  - src/newcharacter.cpp
-  - "**/worldfactory.*"
+- regExp: ".*(newcharacter|worldfactory).*"
+  labels: ["Character / World Generation"]
 
-"Code: Build":
-  - build-data/**/*
-  - build-scripts/**/*
-  - "**/Makefile"
-  - "**/CMakeLists.txt"
-  - "**/*.cmake"
+- regExp: ".*(build-data/|build-scripts/|Makefile|CMakeLists.txt|\\.cmake).*"
+  labels: ["Code: Build"]
 
-"Crafting / Construction / Recipes":
-  - "**/recipes/**/*"
-  - data/json/construction.json
-  - data/json/construction_category.json
-  - data/json/construction_group.json
-  - data/json/deconstruction.json
+- regExp: ".*(\\.astylerc|\\.clang-tidy|\\.editorconfig|\\.lgtm.yml).*"
+  labels: ["Code: Infrastructure / Style / Static Analysis"]
 
-"EOC: Effects On Condition":
-  - "**/**effect_on_condition**"
-  - "**/**eocs**"
+- regExp: ".*(recipes|construction).*"
+  labels: ["Crafting / Construction / Recipes"]
 
-"Fields / Furniture / Terrain / Traps":
-  - "**/furniture**"
+- regExp: ".*(effect_on_condition|eocs).*"
+  labels: ["EOC: Effects On Condition"]
 
-"Items: Food / Vitamins":
-  - "**/food**"
-  - "**/comestibles**"
+- regExp: ".*(fields|furniture|terrain|traps).*"
+  labels: ["Fields / Furniture / Terrain / Traps"]
 
-"NPC / Factions":
-  - "**/**npc**/**/*"
+- regExp: ".*(food|comestibles).*"
+  labels: ["Items: Food / Vitamins"]
 
-"Melee":
-  - "**/melee**"
-  - "**/**techniques**"
+- regExp: ".*npc.*"
+  labels: ["NPC / Factions"]
 
-"Missions":
-  - "**/**mission**"
+- regExp: ".*(melee|tecniques).*"
+  labels: ["Melee"]
 
-"Info / User Interface":
-  - "**/ui/**/*"
-  - "src/**ui**"
-  - "**/widget/**/*"
-  - "src/list_view.*"
-  - "src/surroundings_menu.*"
+- regExp: ".*mission.*"
+  labels: ["Missions"]
 
-"Items: Archery":
-  - "**/**archery**"
-  - "**/**crossbows**"
+- regExp: ".*(ui|widget|list_view|surroundings_menu).*"
+  labels: ["Info / User Interface"]
 
-"Items: Armor / Clothing":
-  - "**/armor/**/*"
+- regExp: ".*(archery|crossbows).*"
+  labels: ["Items: Archery"]
 
-"Items: Battery / UPS":
-  - "**/battery**"
+- regExp: ".*armor.*"
+  labels: ["Items: Armor / Clothing"]
 
-"Items: Containers":
-  - "**/**containers**"
-  - "**/**storage**"
-  - "**/**sheath**"
-  - "**/**holster**"
-  - "**/**ammo_pouch**"
-  - "**/**bandolier**"
-  - "src/item_pocket.*"
-  - "src/item_contents.*"
-  - "tests/item_pocket_test.*"
+- regExp: ".*battery.*"
+  labels: ["Items: Battery / UPS"]
 
-"Items: Magazines":
-  - "**/magazine/**/*"
+- regExp: ".*(container|storege|sheath|holster|ammo_pouch|bandolier|pockets|contents).*"
+  labels: ["Items: Containers"]
 
-"Appliance/Power Grid":
-  - "**/appliance**"
+- regExp: ".*magazine.*"
+  labels: ["Items: Magazines"]
 
-"Monsters":
-  - "**/monsters/**/*"
+- regExp: ".*appliance.*"
+  labels: ["Appliance/Power Grid"]
 
-"Mutations / Traits / Professions/ Hobbies":
-  - "**/professions.json"
-  - "**mutations**"
-  - "**hobbies**"
+- regExp: ".*monster.*"
+  labels: ["Monsters"]
 
-"Lore":
-  - data/json/npcs/BG_trait_groups.json
-  - data/json/npcs/Personality_trait_groups.json
-  - data/json/npcs/personality_traits.json
-  - "**/Backgrounds/**/*"
-  - "**/snippets/**/*"
+- regExp: ".*(profession|mutation|hobbies).*"
+  labels: ["Mutations / Traits / Professions/ Hobbies"]
 
-"Limbs":
-  - "src/bodypart.*"
-  - "data/json/limb_scores.json"
+- regExp: ".*(bodypart|limb).*"
+  labels: ["Limbs"]
 
-"Spawn":
-  - "**/itemgroups/**/*"
-  - "**/monstergroups/**/*"
+- regExp: ".*(itemgroups|monstergroups).*"
+  labels: ["Spawn"]
 
-"Bionics":
-  - "**/bionics.*"
+- regExp: ".*bionics.*"
+  labels: ["Bionics"]
 
-"Map / Mapgen":
-  - "**/mapgen/**/*"
-  - "**/mapgen_palettes/**/*"
-  - "**/overmap/**/*"
-  - "**/overmap**"
+- regExp: ".*(mapgen|overmap).*"
+  labels: ["Map / Mapgen"]
 
-"Martial Arts":
-  - "**/martialarts**"
+- regExp: ".*martialarts.*"
+  labels: ["Martial Arts"]
 
-"Player Faction Base / Camp":
-  - "src/basecamp.*"
-  - "src/faction_camp.*"
-  - data/json/mapgen/basecamps/**/*
+- regExp: ".*(basecamp|faction_camp).*"
+  labels: ["Player Faction Base / Camp"]
 
-"Items: Ammo / Guns":
-  - "**/gun/**/*"
-  - "**/ammo/**/*"
+- regExp: ".*(gun|ammo).*"
+  labels: ["Items: Ammo / Guns"]
 
-"Items: Gunmod / Toolmod":
-  - "**/gunmod**"
-  - "**/toolmod**"
+- regExp: ".*(gunmod|toolmod).*"
+  labels: ["Items: Gunmod / Toolmod"]
 
-"SDL: Tiles / Sound":
-  - gfx/**/*
-  - sound/**/*
+- regExp: ".*(gfx/|sound/).*"
+  labels: ["SDL: Tiles / Sound"]
 
-"Scenarios":
-  - "**/scenario**"
-  - "**/**start_location**"
+- regExp: ".*(scenario|start_location).*"
+  labels: ["Scenarios"]
 
-"Translation":
-  - lang/**/*
-  - "src/translation.*"
+- regExp: ".*(lang/|translation).*"
+  labels: ["Translation"]
 
-"Mods: Aftershock":
-  - data/mods/Aftershock/**/*
-  - data/mods/aftershock_exoplanet/**/*
+- regExp: ".*(lang/|translation).*"
+  labels: ["Translation"]
 
-"Mods: Dark Days of the Dead":
-  - data/mods/classic_zombies/**/*
+- regExp: ".*(data/mods/Aftershock/|data/mods/aftershock_exoplanet/).*"
+  labels: ["Mods: Aftershock"]
 
-"Mods: Dark Skies":
-  - data/mods/Dark-Skies-Above/**/*
+- regExp: ".*data/mods/classic_zombies/.*"
+  labels: ["Mods: Dark Days of the Dead"]
 
-"Mods: DinoMod":
-  - data/mods/DinoMod/**/*
+- regExp: ".*data/mods/Dark-Skies-Above/.*"
+  labels: ["Mods: Dark Skies"]
 
-"Mods: Generic Guns":
-  - data/mods/Generic_Guns/**/*
+- regExp: ".*data/mods/desert_region/.*"
+  labels: ["Mods: Desert Region"]
 
-"Mods: MA":
-  - data/mods/MA/**/*
+- regExp: ".*data/mods/Dinomod/.*"
+  labels: ["Mods: Dinomod"]
 
-"Mods: MMA":
-  - data/mods/MMA/**/*
+- regExp: ".*data/mods/Generic_Guns/.*"
+  labels: ["Mods: Generic Guns"]
 
-"Mods: Magiclysm":
-  - data/mods/Magiclysm/**/*
+- regExp: ".*data/mods/MA/.*"
+  labels: ["Mods: MA"]
 
-"Mods: Innawood 🌲":
-  - data/mods/innawood/**/*
+- regExp: ".*data/mods/MMA/.*"
+  labels: ["Mods: MMA"]
 
-"Mods: No Hope":
-  - data/mods/No_Hope/**/*
+- regExp: ".*data/mods/Magiclysm/.*"
+  labels: ["Mods: Magiclysm"]
 
-"Mods: TropiCataclysm 🌴":
-  - data/mods/TropiCataclysm/**/*
+- regExp: ".*data/mods/innawood/.*"
+  labels: ["Mods: Innawood 🌲"]
 
-"Mods: Tamable Wildlife":
-  - data/mods/Tamable_Wildlife/**/*
+- regExp: ".*data/mods/No_Hope/.*"
+  labels: ["Mods: No Hope"]
 
-"Mods":
-  - data/mods/**/*
+- regExp: ".*data/mods/TropiCataclysm/.*"
+  labels: ["Mods: Tropi Cataclysm 🌴"]
 
-"Mechanics: Enchantments / Spells":
-  - "**/enchantments**"
-  - "**/spells**"
+- regExp: ".*data/mods/Tamable_Wildlife/.*"
+  labels: ["Mods: Tamable Wildlife"]
 
-"Mechanics: Weather":
-  - "**/weather**"
+- regExp: ".*data/mods/Xedra_Evolved/.*"
+  labels: ["Mods: Xedra Evolved"]
 
-"Vehicles":
-  - "**/vehicle**"
+- regExp: ".*data/mods/.*"
+  labels: ["Mods"]
+
+- regExp: ".*spells.*"
+  labels: ["Mechanics: Enchantments / Spells"]
+
+- regExp: ".*weather.*"
+  labels: ["Mechanics: Weather"]
+
+- regExp: ".*vehicle.*"
+  labels: ["Vehicles"]

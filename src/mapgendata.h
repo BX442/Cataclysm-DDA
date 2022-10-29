@@ -76,7 +76,7 @@ class mapgendata
         std::vector<oter_id> predecessors_;
 
     public:
-        oter_id t_nesw[8];
+        std::array<oter_id, 8> t_nesw;
 
         int n_fac = 0;  // dir == 0
         int e_fac = 0;  // dir == 1
@@ -193,7 +193,7 @@ class mapgendata
 
         bool has_flag( jmapgen_flags ) const;
 
-        bool has_join( const cube_direction, const std::string &join_id ) const;
+        bool has_join( cube_direction, const std::string &join_id ) const;
 
         bool has_predecessor() const;
         const oter_id &last_predecessor() const;

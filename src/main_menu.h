@@ -20,11 +20,15 @@ class main_menu
         // Shows the main menu and returns whether a game was started or not
         bool opening_screen();
 
+        static std::string queued_world_to_load;
+        static std::string queued_save_id_to_load;
     private:
         // ASCII art that says "Cataclysm Dark Days Ahead"
         std::vector<std::string> mmenu_title;
         std::string mmenu_motd;
         std::string mmenu_credits;
+        int mmenu_motd_len;
+        int mmenu_credits_len;
         std::vector<std::string> vMenuItems; // MOTD, New Game, Load Game, etc.
         std::vector<std::string> vWorldSubItems;
         std::vector<std::string> vNewGameSubItems;
@@ -48,16 +52,12 @@ class main_menu
         // Play a sound whenever the user moves left or right in the main menu or its tabs
         void on_move() const;
 
-        // Flag to be set when first entering an error condition, cleared when leaving it
-        // Used to prevent error sound from playing repeatedly at input polling rate
-        bool errflag = false;
-        // Play a sound *once* when an error occurs in the main menu or its tabs; sets errflag
+        // Play a sound *once* when an error occurs in the main menu or its tabs
         void on_error();
-        // Clears errflag
-        void clear_error();
 
         // Tab functions. They return whether a game was started or not. The ones that can never
         // start a game have a void return type.
+        bool load_game( std::string const &worldname, save_t const &savegame );
         bool new_character_tab();
         bool load_character_tab( const std::string &worldname );
         void world_tab( const std::string &worldname );
@@ -72,6 +72,7 @@ class main_menu
         input_context ctxt;
         int sel1 = 1;
         int sel2 = 1;
+        int sub_opt_off = 0;
         point LAST_TERM;
         catacurses::window w_open;
         point menu_offset;
