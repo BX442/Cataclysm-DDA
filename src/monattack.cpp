@@ -65,7 +65,6 @@
 #include "mondefense.h"
 #include "monfaction.h"
 #include "monster.h"
-#include "morale_types.h"
 #include "mtype.h"
 #include "npc.h"
 #include "output.h"
@@ -93,6 +92,14 @@
 #include "weighted_list.h"
 
 static const activity_id ACT_RELOAD( "ACT_RELOAD" );
+
+static const ammo_effect_str_id ammo_effect_APPLY_SAP( "APPLY_SAP" );
+static const ammo_effect_str_id ammo_effect_BLINDS_EYES( "BLINDS_EYES" );
+static const ammo_effect_str_id ammo_effect_DRAW_AS_LINE( "DRAW_AS_LINE" );
+static const ammo_effect_str_id ammo_effect_JET( "JET" );
+static const ammo_effect_str_id ammo_effect_NO_DAMAGE_SCALING( "NO_DAMAGE_SCALING" );
+static const ammo_effect_str_id ammo_effect_NO_ITEM_DAMAGE( "NO_ITEM_DAMAGE" );
+static const ammo_effect_str_id ammo_effect_NO_OVERSHOOT( "NO_OVERSHOOT" );
 
 static const bionic_id bio_uncanny_dodge( "bio_uncanny_dodge" );
 
@@ -125,7 +132,6 @@ static const efftype_id effect_grabbed( "grabbed" );
 static const efftype_id effect_grabbing( "grabbing" );
 static const efftype_id effect_grown_of_fuse( "grown_of_fuse" );
 static const efftype_id effect_has_bag( "has_bag" );
-static const efftype_id effect_infected( "infected" );
 static const efftype_id effect_laserlocked( "laserlocked" );
 static const efftype_id effect_onfire( "onfire" );
 static const efftype_id effect_operating( "operating" );
@@ -179,6 +185,10 @@ static const material_id material_steel( "steel" );
 static const material_id material_veggy( "veggy" );
 static const material_id material_water( "water" );
 
+static const morale_type morale_support( "morale_support" );
+
+static const mtype_id mon_amalgamation_breather( "mon_amalgamation_breather" );
+static const mtype_id mon_amalgamation_breather_hub( "mon_amalgamation_breather_hub" );
 static const mtype_id mon_biollante( "mon_biollante" );
 static const mtype_id mon_blob( "mon_blob" );
 static const mtype_id mon_blob_brain( "mon_blob_brain" );
@@ -267,7 +277,7 @@ static Creature *sting_get_target( monster *z, float range = 5.0f )
 
     // Can't see/reach target, no attack
     if( !z->sees( *target ) ||
-        !get_map().clear_path( z->pos(), target->pos(), range, 1, 100 ) ) {
+        !get_map().clear_path( z->pos_bub(), target->pos_bub(), range, 1, 100 ) ) {
         return nullptr;
     }
 
@@ -286,7 +296,7 @@ static bool sting_shoot( monster *z, Creature *target, damage_instance &dam, flo
     proj.speed = 10;
     proj.range = range;
     proj.impact.add( dam );
-    proj.proj_effects.insert( "NO_OVERSHOOT" );
+    proj.proj_effects.insert( ammo_effect_NO_OVERSHOOT );
 
     dealt_projectile_attack atk = projectile_attack( proj, z->pos(), target->pos(),
                                   dispersion_sources{ 500 }, z );
@@ -422,17 +432,45 @@ bool mattack::absorb_items( monster *z )
 
     std::vector<item *> consumed_items;
     std::vector<material_id> absorb_material = z->get_absorb_material();
+    std::vector<material_id> no_absorb_material = z->get_no_absorb_material();
 
     for( item &elem : here.i_at( z->pos() ) ) {
         bool any_materials_match = false;
 
-        if( absorb_material.empty() ) {
+        // there is no whitelist or blacklist so allow anything.
+        if( absorb_material.empty() && no_absorb_material.empty() ) {
             any_materials_match = true;
-        } else {
+            // there is a whitelist but no blacklist
+        } else if( !absorb_material.empty() && no_absorb_material.empty() ) {
             for( const material_type *mat_type : elem.made_of_types() ) {
                 if( std::find( absorb_material.begin(), absorb_material.end(),
                                mat_type->id ) != absorb_material.end() ) {
                     any_materials_match = true;
+                }
+            }
+            // there is no whitelist but there is a blacklist
+        } else if( absorb_material.empty() && !no_absorb_material.empty() ) {
+            bool found = false;
+            for( const material_type *mat_type : elem.made_of_types() ) {
+                if( std::find( no_absorb_material.begin(), no_absorb_material.end(),
+                               mat_type->id ) != no_absorb_material.end() ) {
+                    found = true;
+                }
+            }
+            // if the item wasn't on the blacklist, it's allowed
+            if( !found ) {
+                any_materials_match = true;
+            }
+            // there is a whitelist and a blacklist
+        } else if( !absorb_material.empty() && !no_absorb_material.empty() ) {
+            for( const material_type *mat_type : elem.made_of_types() ) {
+                if( !( std::find( no_absorb_material.begin(), no_absorb_material.end(),
+                                  mat_type->id ) != no_absorb_material.end() ) ) {
+                    // the item wasn't found on the blacklist so check the whitelist
+                    if( std::find( absorb_material.begin(), absorb_material.end(),
+                                   mat_type->id ) != absorb_material.end() ) {
+                        any_materials_match = true;
+                    }
                 }
             }
         }
@@ -554,7 +592,7 @@ bool mattack::graze( monster *z )
         if( here.has_flag( ter_furn_flag::TFLAG_FLOWER, p ) &&
             !here.has_flag( ter_furn_flag::TFLAG_GRAZER_INEDIBLE, p ) &&
             ( z->amount_eaten <= z->stomach_size ) ) {
-            here.furn_set( p, f_null );
+            here.furn_set( p, furn_str_id::NULL_ID() );
             z->amount_eaten += 50;
             //Calorie amount is based on the "small_plant" dummy item, as with the grazer mutation.
             return true;
@@ -751,7 +789,7 @@ bool mattack::acid( monster *z )
     map &here = get_map();
     // Can't see/reach target, no attack
     if( !z->sees( *target ) ||
-        !here.clear_path( z->pos(), target->pos(), 10, 1, 100 ) ) {
+        !here.clear_path( z->pos_bub(), target->pos_bub(), 10, 1, 100 ) ) {
         return false;
     }
     // It takes a while
@@ -764,7 +802,7 @@ bool mattack::acid( monster *z )
     // Mostly just for momentum
     proj.impact.add_damage( damage_acid, 5 );
     proj.range = 10;
-    proj.proj_effects.insert( "NO_OVERSHOOT" );
+    proj.proj_effects.insert( ammo_effect_NO_OVERSHOOT );
     dealt_projectile_attack dealt = projectile_attack( proj, z->pos(), target->pos(), dispersion_sources{ 5400 },
                                     z );
     const tripoint &hitp = dealt.end_point;
@@ -876,8 +914,8 @@ bool mattack::acid_accurate( monster *z )
     projectile proj;
     proj.speed = 10;
     proj.range = 10;
-    proj.proj_effects.insert( "BLINDS_EYES" );
-    proj.proj_effects.insert( "NO_DAMAGE_SCALING" );
+    proj.proj_effects.insert( ammo_effect_BLINDS_EYES );
+    proj.proj_effects.insert( ammo_effect_NO_DAMAGE_SCALING );
     proj.impact.add_damage( damage_acid, rng( 3, 5 ) );
     // Make it arbitrarily less accurate at close ranges
     projectile_attack( proj, z->pos(), target->pos(), dispersion_sources{ 8000.0 * range }, z );
@@ -978,7 +1016,7 @@ bool mattack::pull_metal_weapon( monster *z )
     }
 
     // Can't see/reach target, no attack
-    if( !z->sees( *target ) || !get_map().clear_path( z->pos(), target->pos(),
+    if( !z->sees( *target ) || !get_map().clear_path( z->pos_bub(), target->pos_bub(),
             max_distance, 1, 100 ) ) {
         return false;
     }
@@ -1018,7 +1056,7 @@ bool mattack::pull_metal_weapon( monster *z )
                     proj.impact = damage_instance( damage_bash, pulled_weapon.weight() / 250_gram );
                     // make the projectile stop one tile short to prevent hitting the monster
                     proj.range = rl_dist( foe->pos(), z->pos() ) - 1;
-                    proj.proj_effects = { { "NO_ITEM_DAMAGE", "DRAW_AS_LINE", "NO_DAMAGE_SCALING", "JET" } };
+                    proj.proj_effects = { { ammo_effect_NO_ITEM_DAMAGE, ammo_effect_DRAW_AS_LINE, ammo_effect_NO_DAMAGE_SCALING, ammo_effect_JET } };
 
                     dealt_projectile_attack dealt = projectile_attack( proj, foe->pos(), z->pos(), dispersion_sources{ 0 },
                                                     z );
@@ -1798,7 +1836,7 @@ bool mattack::spit_sap( monster *z )
     projectile proj;
     proj.speed = 10;
     proj.range = 12;
-    proj.proj_effects.insert( "APPLY_SAP" );
+    proj.proj_effects.insert( ammo_effect_APPLY_SAP );
     proj.impact.add_damage( damage_acid, rng( 5, 10 ) );
     projectile_attack( proj, z->pos(), target->pos(), dispersion_sources{ 150 }, z );
 
@@ -1824,8 +1862,8 @@ bool mattack::triffid_heartbeat( monster *z )
     creature_tracker &creatures = get_creature_tracker();
     static pathfinding_settings root_pathfind( 10, 20, 50, 0, false, false, false, false, false,
             false );
-    if( rl_dist( z->pos(), player_character.pos() ) > 5 &&
-        !here.route( player_character.pos(), z->pos(), root_pathfind ).empty() ) {
+    if( rl_dist( z->pos_bub(), player_character.pos_bub() ) > 5 &&
+        !here.route( player_character.pos_bub(), z->pos_bub(), root_pathfind ).empty() ) {
         add_msg( m_warning, _( "The root walls creak around you." ) );
         for( const tripoint &dest : here.points_in_radius( z->pos(), 3 ) ) {
             if( g->is_empty( dest ) && one_in( 4 ) ) {
@@ -1836,7 +1874,7 @@ bool mattack::triffid_heartbeat( monster *z )
         }
         // Open blank tiles as long as there's no possible route
         int tries = 0;
-        while( here.route( player_character.pos(), z->pos(), root_pathfind ).empty() &&
+        while( here.route( player_character.pos_bub(), z->pos_bub(), root_pathfind ).empty() &&
                tries < 20 ) {
             point p( rng( player_character.posx(), z->posx() - 3 ),
                      rng( player_character.posy(), z->posy() - 3 ) );
@@ -2283,61 +2321,6 @@ bool mattack::fungus_fortify( monster *z )
     return true;
 }
 
-bool mattack::impale( monster *z )
-{
-    if( !z->can_act() ) {
-        return false;
-    }
-    Creature *target = z->attack_target();
-    if( target == nullptr || !z->is_adjacent( target, false ) ) {
-        return false;
-    }
-
-    z->mod_moves( -to_moves<int>( 1_seconds ) * 0.8 );
-
-    bodypart_id hit = bodypart_id( "torso" );
-    damage_instance dam_inst = damage_instance( damage_stab, rng( 10, 20 ), rng( 5, 15 ), .5 );
-
-    if( target->dodge_check( z, hit, dam_inst ) ) {
-        game_message_type msg_type = target->is_avatar() ? m_warning : m_info;
-        target->add_msg_player_or_npc( msg_type, _( "The %s lunges at you, but you dodge!" ),
-                                       _( "The %s lunges at <npcname>, but they dodge!" ),
-                                       z->name() );
-
-        target->on_dodge( z, z->type->melee_skill * 2 );
-        return true;
-    }
-
-    target->block_hit( z, hit, dam_inst );
-
-    int dam = target->deal_damage( z, hit, dam_inst ).total_damage();
-    if( dam > 0 ) {
-        game_message_type msg_type = target->is_avatar() ? m_bad : m_info;
-        target->add_msg_player_or_npc( msg_type,
-                                       //~ 1$s is monster name, 2$s bodypart in accusative
-                                       _( "The %1$s impales your torso!" ),
-                                       //~ 1$s is monster name, 2$s bodypart in accusative
-                                       _( "The %1$s impales <npcname>'s torso!" ),
-                                       z->name() );
-
-        target->on_hit( z, bodypart_id( "torso" ),  z->type->melee_skill );
-        if( rng( 0, 200 + dam ) > 100 ) {
-            target->add_effect( effect_downed, 3_turns );
-        }
-        z->mod_moves( -to_moves<int>( 1_seconds ) *
-                      0.8 ); //Takes extra time for the creature to pull out the protrusion
-    } else {
-        target->add_msg_player_or_npc(
-            _( "The %1$s tries to impale your torso, but fails to penetrate your armor!" ),
-            _( "The %1$s tries to impale <npcname>'s torso, but fails to penetrate their armor!" ),
-            z->name() );
-    }
-
-    target->check_dead_state();
-
-    return true;
-}
-
 bool mattack::dermatik( monster *z )
 {
     if( !z->can_act() ) {
@@ -2467,7 +2450,7 @@ bool mattack::disappear( monster *z )
 bool mattack::depart( monster *z )
 {
     map &here = get_map();
-    if( z->has_flag( mon_flag_FLIES ) && here.is_outside( z->pos() ) ) {
+    if( z->has_flag( mon_flag_FLIES ) && here.is_outside( z->pos_bub() ) ) {
         add_msg_if_player_sees( *z, m_info, _( "The %s turns to a steady climb before departing." ),
                                 z->name() );
     } else {
@@ -2771,83 +2754,6 @@ bool mattack::dogthing( monster *z )
     z->poly( mon_headless_dog_thing );
 
     return false;
-}
-
-bool mattack::tentacle( monster *z )
-{
-    if( z->friendly ) {
-        // TODO: handle friendly monsters
-        return false;
-    }
-    Creature *target = z->attack_target();
-
-    // Can't see/reach target, no attack
-    if( target == nullptr || rl_dist( z->pos(), target->pos() ) > 3 || !z->sees( *target ) ||
-        !get_map().clear_path( z->pos(), target->pos(), 3, 1, 100 ) ) {
-        return false;
-    }
-    game_message_type msg_type = target->is_avatar() ? m_bad : m_info;
-    target->add_msg_player_or_npc( msg_type,
-                                   _( "The %s lashes its tentacle at you!" ),
-                                   _( "The %s lashes its tentacle at <npcname>!" ),
-                                   z->name() );
-    z->mod_moves( -to_moves<int>( 1_seconds ) );
-
-    bodypart_id hit = target->get_random_body_part();
-    damage_instance dam_inst = damage_instance( damage_bash, rng( 10, 20 ) );
-
-    // Can we dodge the attack? Uses player dodge function % chance (melee.cpp)
-    if( target->dodge_check( z, hit, dam_inst ) ) {
-        target->add_msg_player_or_npc( _( "You dodge it!" ),
-                                       _( "<npcname> dodges it!" ) );
-        target->on_dodge( z, z->type->melee_skill );
-        return true;
-    }
-
-    target->block_hit( z, hit, dam_inst );
-
-    int dam = target->deal_damage( z, hit, dam_inst ).total_damage();
-    if( dam > 0 ) {
-        target->add_msg_player_or_npc( msg_type,
-                                       //~ 1$s is bodypart name, 2$d is damage value.
-                                       _( "Your %1$s is hit for %2$d damage!" ),
-                                       //~ 1$s is bodypart name, 2$d is damage value.
-                                       _( "<npcname>'s %1$s is hit for %2$d damage!" ),
-                                       body_part_name( hit ),
-                                       dam );
-    } else {
-        target->add_msg_player_or_npc(
-            _( "The %1$s lashes its tentacle at your %2$s, but glances off your armor!" ),
-            _( "The %1$s lashes its tentacle at <npcname>'s %2$s, but glances off their armor!" ),
-            z->name(),
-            body_part_name_accusative( hit ) );
-    }
-
-    target->on_hit( z, hit,  z->type->melee_skill );
-    target->check_dead_state();
-
-    return true;
-}
-
-bool mattack::gene_sting( monster *z )
-{
-    const float range = 7.0f;
-    Creature *target = sting_get_target( z, range );
-    if( target == nullptr || !( target->is_avatar() || target->is_npc() ) ) {
-        return false;
-    }
-
-    z->mod_moves( -to_moves<int>( 1_seconds ) * 1.5 );
-
-    damage_instance dam = damage_instance();
-    dam.add_damage( damage_stab, 6, 10, 0.6, 1 );
-    bool hit = sting_shoot( z, target, dam, range );
-    if( hit ) {
-        //Add checks if previous NPC/player conditions are removed
-        dynamic_cast<Character *>( target )->mutate();
-    }
-
-    return true;
 }
 
 bool mattack::para_sting( monster *z )
@@ -3709,7 +3615,7 @@ void mattack::flame( monster *z, Creature *target )
         // friendly
         // It takes a while
         z->mod_moves( -to_moves<int>( 5_seconds ) );
-        if( !here.sees( z->pos(), target->pos(), dist ) ) {
+        if( !here.sees( z->pos_bub(), target->pos_bub(), dist ) ) {
             // shouldn't happen
             debugmsg( "mattack::flame invoked on invisible target" );
         }
@@ -3732,7 +3638,7 @@ void mattack::flame( monster *z, Creature *target )
 
     // It takes a while
     z->mod_moves( -to_moves<int>( 5_seconds ) );
-    if( !here.sees( z->pos(), target->pos(), dist + 1 ) ) {
+    if( !here.sees( z->pos_bub(), target->pos_bub(), dist + 1 ) ) {
         // shouldn't happen
         debugmsg( "mattack::flame invoked on invisible target" );
     }
@@ -4073,13 +3979,17 @@ bool mattack::breathe( monster *z )
 {
     // It takes a while
     z->mod_moves( -to_moves<int>( 1_seconds ) );
+    bool old_breather_type = z->type->id == mon_breather || z->type->id == mon_breather_hub;
+    mtype_id breather_type = old_breather_type ? mon_breather : mon_amalgamation_breather;
+    mtype_id hub_type = old_breather_type ? mon_breather_hub : mon_amalgamation_breather_hub;
+    int spawn_radius = old_breather_type ? 3 : 2;
 
-    bool able = z->type->id == mon_breather_hub;
+    bool able = z->type->id == hub_type;
     creature_tracker &creatures = get_creature_tracker();
     if( !able ) {
-        for( const tripoint &dest : get_map().points_in_radius( z->pos(), 3 ) ) {
+        for( const tripoint &dest : get_map().points_in_radius( z->pos(), spawn_radius ) ) {
             monster *const mon = creatures.creature_at<monster>( dest );
-            if( mon && mon->type->id == mon_breather_hub ) {
+            if( mon && mon->type->id == hub_type ) {
                 able = true;
                 break;
             }
@@ -4089,95 +3999,10 @@ bool mattack::breathe( monster *z )
         return true;
     }
 
-    if( monster *const spawned = g->place_critter_around( mon_breather, z->pos(), 1 ) ) {
+    if( monster *const spawned = g->place_critter_around( breather_type, z->pos(), 1 ) ) {
         spawned->reset_special( "BREATHE" );
         spawned->make_ally( *z );
     }
-
-    return true;
-}
-
-bool mattack::stretch_bite( monster *z )
-{
-    if( !z->can_act() ) {
-        return false;
-    }
-
-    // Let it be used on non-player creatures
-    // can be used at close range too!
-    Creature *target = z->attack_target();
-    if( target == nullptr ) {
-        return false;
-    }
-    int distance = rl_dist( z->pos(), target->pos() );
-    // Hack, only allow attacking above or below if the target is adjacent.
-    if( z->pos().z != target->pos().z ) {
-        distance += 2;
-    }
-    if( distance > 3 || !z->sees( *target ) ) {
-        return false;
-    }
-
-    z->mod_moves( -to_moves<int>( 1_seconds ) * 1.5 );
-
-    map &here = get_map();
-    for( tripoint &pnt : here.find_clear_path( z->pos(), target->pos() ) ) {
-        if( here.impassable( pnt ) ) {
-            z->add_effect( effect_stunned, 6_turns );
-            target->add_msg_player_or_npc( _( "The %1$s stretches its head at you, but bounces off the %2$s" ),
-                                           _( "The %1$s stretches its head at <npcname>, but bounces off the %2$s" ),
-                                           z->name(), here.obstacle_name( pnt ) );
-            return true;
-        }
-    }
-
-    bodypart_id hit = target->get_random_body_part();
-    damage_instance dam_inst = damage_instance( damage_stab, rng( 5, 15 ) );
-
-    // Can we dodge the attack? Uses player dodge function % chance (melee.cpp)
-    if( target->dodge_check( z, hit, dam_inst ) ) {
-        z->mod_moves( -to_moves<int>( 1_seconds ) * 1.5 );
-        z->add_effect( effect_stunned, 3_turns );
-        game_message_type msg_type = target->is_avatar() ? m_warning : m_info;
-        target->add_msg_player_or_npc( msg_type,
-                                       _( "The %s's head extends to bite you, but you dodge and the head sails past!" ),
-                                       _( "The %s's head extends to bite <npcname>, but they dodge and the head sails past!" ),
-                                       z->name() );
-
-        target->on_dodge( z, z->type->melee_skill * 2 );
-        return true;
-    }
-
-    target->block_hit( z, hit, dam_inst );
-
-    int dam = target->deal_damage( z, hit, dam_inst ).total_damage();
-    if( dam > 0 ) {
-        game_message_type msg_type = target->is_avatar() ? m_bad : m_info;
-        target->add_msg_player_or_npc( msg_type,
-                                       //~ 1$s is monster name, 2$s bodypart in accusative
-                                       _( "The %1$s's teeth sink into your %2$s!" ),
-                                       //~ 1$s is monster name, 2$s bodypart in accusative
-                                       _( "The %1$s's teeth sink into <npcname>'s %2$s!" ),
-                                       z->name(),
-                                       body_part_name_accusative( hit ) );
-
-        if( !hit->has_flag( json_flag_BIONIC_LIMB ) && one_in( 16 - dam ) ) {
-            if( target->has_effect( effect_bite, hit.id() ) ) {
-                target->add_effect( effect_bite, 40_minutes, hit, true );
-            } else if( target->has_effect( effect_infected, hit.id() ) ) {
-                target->add_effect( effect_infected, 25_minutes, hit, true );
-            } else {
-                target->add_effect( effect_bite, 1_turns, hit, true );
-            }
-        }
-    } else {
-        target->add_msg_player_or_npc( _( "The %1$s's head hits your %2$s, but glances off your armor!" ),
-                                       _( "The %1$s's head hits <npcname>'s %2$s, but glances off armor!" ),
-                                       z->name(),
-                                       body_part_name_accusative( hit ) );
-    }
-
-    target->on_hit( z, hit,  z->type->melee_skill );
 
     return true;
 }
@@ -4389,117 +4214,6 @@ bool mattack::lunge( monster *z )
     return true;
 }
 
-bool mattack::longswipe( monster *z )
-{
-    if( z->friendly ) {
-        // TODO: handle friendly monsters
-        return false;
-    }
-    Creature *target = z->attack_target();
-    if( target == nullptr ) {
-        return false;
-    }
-    // Out of range
-    int distance = rl_dist( z->pos(), target->pos() );
-    // Hack, only allow attacking above or below if the target is adjacent.
-    if( z->pos().z != target->pos().z ) {
-        distance += 2;
-    }
-    if( distance > 3 || !z->sees( *target ) ) {
-        return false;
-    }
-    map &here = get_map();
-    //Is there something impassable blocking the claw?
-    for( const tripoint &pnt : here.find_clear_path( z->pos(), target->pos() ) ) {
-        if( here.impassable( pnt ) ) {
-            //If we're here, it's an nonadjacent attack, which is only attempted 1/5 of the time.
-            if( !one_in( 5 ) ) {
-                return false;
-            }
-            target->add_msg_player_or_npc( _( "The %1$s thrusts a claw at you, but it bounces off the %2$s!" ),
-                                           _( "The %1$s thrusts a claw at <npcname>, but it bounces off the %2$s!" ),
-                                           z->name(), here.obstacle_name( pnt ) );
-            z->mod_moves( -150 );
-            return true;
-        }
-    }
-
-    if( !z->is_adjacent( target, true ) ) {
-        if( one_in( 5 ) ) {
-
-            z->mod_moves( -to_moves<int>( 1_seconds ) * 1.5 );
-
-            bodypart_id hit = target->get_random_body_part();
-            damage_instance dam_inst = damage_instance( damage_cut, rng( 3, 7 ) );
-
-            // Can we dodge the attack? Uses player dodge function % chance (melee.cpp)
-            if( target->dodge_check( z, hit, dam_inst ) ) {
-                target->add_msg_player_or_npc( _( "The %s thrusts a claw at you, but you evade it!" ),
-                                               _( "The %s thrusts a claw at <npcname>, but they evade it!" ),
-                                               z->name() );
-                target->on_dodge( z, z->type->melee_skill );
-                return true;
-            }
-
-            target->block_hit( z, hit, dam_inst );
-
-            int dam = target->deal_damage( z, hit, dam_inst ).total_damage();
-            if( dam > 0 ) {
-                game_message_type msg_type = target->is_avatar() ? m_bad : m_warning;
-                target->add_msg_player_or_npc( msg_type,
-                                               //~ 1$s is bodypart name, 2$d is damage value.
-                                               _( "The %1$s thrusts a claw at your %2$s, slashing it for %3$d damage!" ),
-                                               //~ 1$s is bodypart name, 2$d is damage value.
-                                               _( "The %1$s thrusts a claw at <npcname>'s %2$s, slashing it for %3$d damage!" ),
-                                               z->name(), body_part_name( hit ), dam );
-            } else {
-                target->add_msg_player_or_npc(
-                    _( "The %1$s thrusts a claw at your %2$s, but glances off your armor!" ),
-                    _( "The %1$s thrusts a claw at <npcname>'s %2$s, but glances off armor!" ),
-                    z->name(),
-                    body_part_name_accusative( hit ) );
-            }
-            target->on_hit( z, hit,  z->type->melee_skill );
-            return true;
-        }
-        return false;
-    }
-    z->mod_moves( -to_moves<int>( 1_seconds ) );
-
-    bodypart_id hit = bodypart_id( "head" );
-    damage_instance dam_inst = damage_instance( damage_cut, rng( 6, 10 ) );
-
-    // Can we dodge the attack? Uses player dodge function % chance (melee.cpp)
-    if( target->dodge_check( z, hit, dam_inst ) ) {
-        target->add_msg_player_or_npc( _( "The %s slashes at your neck!  You duck!" ),
-                                       _( "The %s slashes at <npcname>'s neck!  They duck!" ), z->name() );
-        target->on_dodge( z, z->type->melee_skill );
-        return true;
-    }
-
-    target->block_hit( z, hit, dam_inst );
-
-    int dam = target->deal_damage( z, hit, dam_inst ).total_damage();
-    if( dam > 0 ) {
-        game_message_type msg_type = target->is_avatar() ? m_bad : m_warning;
-        target->add_msg_player_or_npc( msg_type,
-                                       _( "The %1$s slashes at your neck, cutting your throat for %2$d damage!" ),
-                                       _( "The %1$s slashes at <npcname>'s neck, cutting their throat for %2$d damage!" ),
-                                       z->name(), dam );
-        target->add_effect( effect_source( z ), effect_bleed, 15_minutes,
-                            target->get_random_body_part_of_type( body_part_type::type::head ) );
-    } else {
-        target->add_msg_player_or_npc( _( "The %1$s slashes at your %2$s, but glances off your armor!" ),
-                                       _( "The %1$s slashes at <npcname>'s %2$s, but glances off armor!" ),
-                                       z->name(),
-                                       body_part_name_accusative( bodypart_id( "head" ) ) );
-    }
-    target->on_hit( z, bodypart_id( "head" ),  z->type->melee_skill );
-    target->check_dead_state();
-
-    return true;
-}
-
 bool mattack::blow_whistle( monster *z )
 {
     if( z->friendly ) {
@@ -4625,7 +4339,7 @@ bool mattack::slimespring( monster *z )
     // This morale buff effect could get spammy
     if( player_character.get_morale_level() <= 1 ) {
         add_msg( m_good, "%s", SNIPPET.random_from_category( "slime_cheers" ).value_or( translation() ) );
-        player_character.add_morale( MORALE_SUPPORT, 10, 50 );
+        player_character.add_morale( morale_support, 10, 50 );
     }
     // They will stave off loneliness, but aren't a substitute for real friends.
     if( player_character.has_effect( effect_social_dissatisfied ) ) {

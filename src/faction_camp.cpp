@@ -85,6 +85,9 @@ class character_id;
 
 static const activity_id ACT_MOVE_LOOT( "ACT_MOVE_LOOT" );
 
+static const furn_str_id furn_f_plant_harvest( "f_plant_harvest" );
+static const furn_str_id furn_f_plant_seed( "f_plant_seed" );
+
 static const item_group_id
 Item_spawn_data_foraging_faction_camp_autumn( "foraging_faction_camp_autumn" );
 static const item_group_id
@@ -168,10 +171,9 @@ static const ter_str_id ter_t_grass_long( "t_grass_long" );
 static const ter_str_id ter_t_grass_tall( "t_grass_tall" );
 static const ter_str_id ter_t_improvised_shelter( "t_improvised_shelter" );
 static const ter_str_id ter_t_moss( "t_moss" );
-static const ter_str_id ter_t_open_air( "t_open_air" );
 static const ter_str_id ter_t_sand( "t_sand" );
+static const ter_str_id ter_t_stump( "t_stump" );
 static const ter_str_id ter_t_tree_young( "t_tree_young" );
-static const ter_str_id ter_t_treetop( "t_treetop" );
 static const ter_str_id ter_t_trunk( "t_trunk" );
 
 static const trait_id trait_DEBUG_HS( "DEBUG_HS" );
@@ -667,10 +669,6 @@ faction *basecamp::fac() const
 recipe_id base_camps::select_camp_option( const std::map<recipe_id, translation> &pos_options,
         const std::string &option )
 {
-    if( pos_options.size() == 1 ) {
-        return pos_options.begin()->first;
-    }
-
     std::vector<std::string> pos_names;
     int choice = 0;
 
@@ -701,9 +699,9 @@ void talk_function::start_camp( npc &p )
 {
     const tripoint_abs_omt omt_pos = p.global_omt_location();
     const oter_id &omt_ref = overmap_buffer.ter( omt_pos );
-
-    const auto &pos_camps = recipe_group::get_recipes_by_id( "all_faction_base_types",
-                            omt_ref.id().c_str() );
+    const std::optional<mapgen_arguments> *maybe_args = overmap_buffer.mapgen_args( omt_pos );
+    const auto &pos_camps = recipe_group::get_recipes_by_id( "all_faction_base_types", omt_ref,
+                            maybe_args );
     if( pos_camps.empty() ) {
         popup( _( "You cannot build a camp here." ) );
         return;
@@ -753,6 +751,10 @@ void talk_function::basecamp_mission( npc &p )
         return;
     }
     basecamp *bcp = *temp_camp;
+    if( !bcp->allowed_access_by( p ) ) {
+        popup( _( "%s isn't under your control!" ), bcp->name );
+        return;
+    }
     bcp->set_by_radio( get_avatar().dialogue_by_radio );
     map &here = bcp->get_camp_map();
     bcp->form_storage_zones( here, p.get_location() );
@@ -788,7 +790,6 @@ void basecamp::get_available_missions_by_dir( mission_data &mission_key, const p
 
     const std::string dir_id = base_camps::all_directions.at( dir ).id;
     const std::string dir_abbr = base_camps::all_directions.at( dir ).bracket_abbr.translated();
-    const tripoint_abs_omt omt_trg = omt_pos + dir;
 
     {
         // return legacy workers. How old is this legacy?...
@@ -1309,12 +1310,12 @@ void basecamp::get_available_missions_by_dir( mission_data &mission_key, const p
         if( npc_list.empty() ) {
             entry = _( "Notes:\n"
                        "Plow any spaces that have reverted to dirt or grass.\n\n" ) +
-                    farm_description( omt_trg, plots, farm_ops::plow ) +
+                    farm_description( dir, plots, farm_ops::plow ) +
                     _( "\n\n"
                        "Skill used: fabrication\n"
                        "Difficulty: N/A\n"
                        "Effects:\n"
-                       "> Restores only the plots created in the last expansion upgrade.\n"
+                       "> Restores farm plots created in previous expansion upgrades.\n"
                        "> Does not damage existing crops.\n\n"
                        "Risk: None\n"
                        "Intensity: Moderate\n"
@@ -1337,7 +1338,7 @@ void basecamp::get_available_missions_by_dir( mission_data &mission_key, const p
             entry = _( "Notes:\n"
                        "Plant designated seeds in the spaces that have already been "
                        "tilled.\n\n" ) +
-                    farm_description( omt_trg, plots, farm_ops::plant ) +
+                    farm_description( dir, plots, farm_ops::plant ) +
                     _( "\n\n"
                        "Skill used: survival\n"
                        "Difficulty: N/A\n"
@@ -1351,7 +1352,7 @@ void basecamp::get_available_missions_by_dir( mission_data &mission_key, const p
                        "Positions: 0/1\n" );
             mission_key.add_start( miss_id,
                                    name_display_of( miss_id ), entry,
-                                   plots > 0 && warm_enough_to_plant( omt_trg ) );
+                                   plots > 0 && warm_enough_to_plant( omt_pos + dir ) );
         } else {
             entry = action_of( miss_id.id );
             bool avail = update_time_left( entry, npc_list );
@@ -1366,7 +1367,7 @@ void basecamp::get_available_missions_by_dir( mission_data &mission_key, const p
         if( npc_list.empty() ) {
             entry = _( "Notes:\n"
                        "Harvest any plants that are ripe and bring the produce back.\n\n" ) +
-                    farm_description( omt_trg, plots, farm_ops::harvest ) +
+                    farm_description( dir, plots, farm_ops::harvest ) +
                     _( "\n\n"
                        "Skill used: survival\n"
                        "Difficulty: N/A\n"
@@ -1424,7 +1425,7 @@ void basecamp::get_available_missions( mission_data &mission_key, map &here )
                                           "> If the expansion direction selected is eligible for conversion into "
                                           "a field this mission will perform that conversion.  If it is not eligible "
                                           "you are told as much, and would have to make it suitable for conversion "
-                                          "by removing everything that isn' grass or soil.  Mining zones are useful to "
+                                          "by removing everything that isn't grass or soil.  Mining zones are useful to "
                                           "remove pavement, for instance.  Note that removal of buildings is dangerous, "
                                           "laborious, and may still fail to get rid of everything if e.g. a basement or "
                                           "an opening to underground areas (such as a manhole) remains.\n\n"
@@ -1447,8 +1448,10 @@ void basecamp::get_available_missions( mission_data &mission_key, map &here )
             for( const auto &dir : base_camps::all_directions ) {
                 if( dir.first != base_camps::base_dir && expansions.find( dir.first ) == expansions.end() ) {
                     const oter_id &omt_ref = overmap_buffer.ter( omt_pos + dir.first );
+                    const std::optional<mapgen_arguments> *maybe_args = overmap_buffer.mapgen_args(
+                                omt_pos + dir.first );
                     const auto &pos_expansions = recipe_group::get_recipes_by_id( "all_faction_base_expansions",
-                                                 omt_ref.id().c_str() );
+                                                 omt_ref, maybe_args );
                     if( !pos_expansions.empty() ) {
                         possible_expansion_found = true;
                         break;
@@ -1695,7 +1698,18 @@ void basecamp::choose_new_leader()
 
 void basecamp::player_eats_meal()
 {
-    int kcal_to_eat = 3000;
+    uilist smenu;
+    smenu.text = _( "Have a meal?" );
+    int i = 1;
+    smenu.addentry( i++, true, '1', _( "Snack" ) );
+    smenu.addentry( i++, true, '2', _( "Meal" ) );
+    smenu.addentry( i++, true, '3', _( "Just stuff your face.  You're hungry!" ) );
+    smenu.query();
+    if( smenu.ret_act != "CONFIRM" ) {
+        popup( _( "You decide not to have anything after all." ) );
+        return;
+    }
+    int kcal_to_eat = smenu.ret * 750 - 250; // 500, 1250, 2000 kcal
     Character &you = get_player_character();
     const int &food_available = fac()->food_supply.kcal();
     if( food_available <= 0 ) {
@@ -1717,8 +1731,6 @@ bool basecamp::handle_mission( const ui_mission_id &miss_id )
 
     const point &miss_dir = miss_id.id.dir.value();
     //  All missions should supply dir. Bug if they don't, so blow up during testing.
-
-    const tripoint_abs_omt omt_trg = omt_pos + miss_dir;
 
     switch( miss_id.id.id ) {
         case Camp_Distribute_Food:
@@ -1943,9 +1955,9 @@ bool basecamp::handle_mission( const ui_mission_id &miss_id )
         case Camp_Plant:
         case Camp_Harvest:
             if( miss_id.ret ) {
-                farm_return( miss_id.id, omt_trg );
+                farm_return( miss_id.id, miss_dir );
             } else {
-                start_farm_op( omt_trg, miss_id.id, MODERATE_EXERCISE );
+                start_farm_op( miss_dir, miss_id.id, MODERATE_EXERCISE );
             }
             break;
 
@@ -2165,14 +2177,17 @@ void basecamp::abandon_camp()
     for( npc_ptr &guy : get_npcs_assigned() ) {
         talk_function::stop_guard( *guy );
     }
+    // We must send this message early, before the name is erased.
+    add_msg( m_info, _( "You abandon %s." ), name );
+    std::set<tripoint_abs_omt> &known_camps = get_player_character().camps;
+    known_camps.erase( omt_pos );
     overmap_buffer.remove_camp( *this );
     map &here = get_map();
     const tripoint sm_pos = omt_to_sm_copy( omt_pos.raw() );
     const tripoint ms_pos = sm_to_ms_copy( sm_pos );
     // We cannot use bb_pos here, because bb_pos may be {0,0,0} if you haven't examined the bulletin board on camp ever.
     // here.remove_submap_camp( here.getlocal( bb_pos ) );
-    here.remove_submap_camp( here.getlocal( ms_pos ) );
-    add_msg( m_info, _( "You abandon %s." ), name );
+    here.remove_submap_camp( here.bub_from_abs( ms_pos ) );
 }
 
 void basecamp::scan_pseudo_items()
@@ -2187,7 +2202,7 @@ void basecamp::scan_pseudo_items()
         tripoint mapmin = tripoint( 0, 0, omt_pos.z() );
         tripoint mapmax = tripoint( 2 * SEEX - 1, 2 * SEEY - 1, omt_pos.z() );
         for( const tripoint &pos : expansion_map.points_in_rectangle( mapmin, mapmax ) ) {
-            if( expansion_map.furn( pos ) != f_null &&
+            if( expansion_map.furn( pos ) != furn_str_id::NULL_ID() &&
                 expansion_map.furn( pos ).obj().crafting_pseudo_item.is_valid() &&
                 expansion_map.furn( pos ).obj().crafting_pseudo_item.obj().has_flag( flag_ALLOWS_REMOTE_USE ) ) {
                 bool found = false;
@@ -2359,7 +2374,7 @@ void basecamp::job_assignment_ui()
         draw_border( w_jobs );
         mvwprintz( w_jobs, point( 46, 1 ), c_white, _( "Job/Priority" ) );
         const nc_color col = c_white;
-        const std::string no_npcs = _( "There are no npcs stationed here" );
+        const std::string no_npcs = _( "There are no NPCs stationed here" );
         if( !stationed_npcs.empty() ) {
             draw_scrollbar( w_jobs, selection, entries_per_page, stationed_npcs.size(),
                             point( 0, 3 ) );
@@ -3540,11 +3555,14 @@ static bool farm_valid_seed( const item &itm )
     return itm.is_seed() && itm.typeId() != itype_marloss_seed && itm.typeId() != itype_fungal_seeds;
 }
 
-static std::pair<size_t, std::string> farm_action( const tripoint_abs_omt &omt_tgt, farm_ops op,
-        const npc_ptr &comp = nullptr )
+std::pair<size_t, std::string> basecamp::farm_action( const point &dir, farm_ops op,
+        const npc_ptr &comp )
 {
     size_t plots_cnt = 0;
     std::string crops;
+
+    const auto e_data = expansions.find( dir );
+    const tripoint_abs_omt omt_tgt = e_data->second.pos;
 
     const auto is_dirtmound = []( const tripoint & pos, tinymap & bay1, tinymap & bay2 ) {
         return ( bay1.ter( pos ) == ter_t_dirtmound ) && ( !bay2.has_furn( pos ) );
@@ -3561,10 +3579,10 @@ static std::pair<size_t, std::string> farm_action( const tripoint_abs_omt &omt_t
     }
 
     // farm_map is what the area actually looks like
-    tinymap farm_map;
+    smallmap farm_map;
     farm_map.load( omt_tgt, false );
     // farm_json is what the area should look like according to jsons (loaded on demand)
-    std::unique_ptr<fake_map> farm_json;
+    std::unique_ptr<small_fake_map> farm_json;
     tripoint mapmin = tripoint( 0, 0, omt_tgt.z() );
     tripoint mapmax = tripoint( 2 * SEEX - 1, 2 * SEEY - 1, omt_tgt.z() );
     bool done_planting = false;
@@ -3577,11 +3595,43 @@ static std::pair<size_t, std::string> farm_action( const tripoint_abs_omt &omt_t
         switch( op ) {
             case farm_ops::plow: {
                 if( !farm_json ) {
-                    farm_json = std::make_unique<fake_map>();
+                    farm_json = std::make_unique<small_fake_map>();
                     mapgendata dat( omt_tgt, *farm_json->cast_to_map(), 0, calendar::turn, nullptr );
-                    if( !run_mapgen_func( dat.terrain_type()->get_mapgen_id(), dat ) ) {
+                    std::string omt_id = dat.terrain_type()->get_mapgen_id();
+                    if( !run_mapgen_func( omt_id, dat ) ) {
                         debugmsg( "Failed to run mapgen for farm map" );
                         break;
+                    }
+                    // Add mapgen from expansion upgrades to fake_map
+                    for( auto const &provide : e_data->second.provides ) {
+                        if( !recipe_id( provide.first ).is_valid() ) {
+                            continue;
+                        }
+                        const recipe &making = *recipe_id( provide.first );
+                        const update_mapgen_id update_id = making.get_blueprint();
+                        if( !has_update_mapgen_for( update_id ) ) {
+                            continue;
+                        }
+                        bool mirror_horizontal;
+                        bool mirror_vertical;
+                        int rotation;
+                        if( !extract_and_check_orientation_flags( making.ident(),
+                                dir,
+                                mirror_horizontal,
+                                mirror_vertical,
+                                rotation,
+                                "%s failed to apply orientation flags to the %s upgrade",
+                                "farm_action" ) ) {
+                            continue;
+                        }
+                        farm_json->rotate( 4 - rotation );
+                        farm_json->mirror( mirror_horizontal, mirror_vertical );
+                        if( !run_mapgen_update_func( update_id, dat, false ) ) {
+                            debugmsg( "farm_action failed to apply the %s map update to %s",
+                                      provide.first, omt_id );
+                        }
+                        farm_json->rotate( rotation );
+                        farm_json->mirror( mirror_horizontal, mirror_vertical );
                     }
                 }
                 // Needs to be plowed to match json
@@ -3613,7 +3663,7 @@ static std::pair<size_t, std::string> farm_action( const tripoint_abs_omt &omt_t
                         }
                         used_seed.front().set_age( 0_turns );
                         farm_map.add_item_or_charges( pos, used_seed.front() );
-                        farm_map.set( pos, ter_t_dirt, f_plant_seed );
+                        farm_map.set( pos, ter_t_dirt, furn_f_plant_seed );
                         if( !tmp_seed->count_by_charges() ) {
                             comp->companion_mission_inv.remove_item( tmp_seed );
                         }
@@ -3621,7 +3671,7 @@ static std::pair<size_t, std::string> farm_action( const tripoint_abs_omt &omt_t
                 }
                 break;
             case farm_ops::harvest:
-                if( farm_map.furn( pos ) == f_plant_harvest ) {
+                if( farm_map.furn( pos ) == furn_f_plant_harvest ) {
                     // Can't use item_stack::only_item() since there might be fertilizer
                     map_stack items = farm_map.i_at( pos );
                     const map_stack::iterator seed = std::find_if( items.begin(), items.end(), []( const item & it ) {
@@ -3641,7 +3691,7 @@ static std::pair<size_t, std::string> farm_action( const tripoint_abs_omt &omt_t
                                 here.add_item_or_charges( player_character.pos(), i );
                             }
                             farm_map.i_clear( pos );
-                            farm_map.furn_set( pos, f_null );
+                            farm_map.furn_set( pos, furn_str_id::NULL_ID() );
                             farm_map.ter_set( pos, ter_t_dirt );
                         } else {
                             plant_names.insert( item::nname( itype_id( seed->type->seed->fruit_id ) ) );
@@ -3672,7 +3722,7 @@ static std::pair<size_t, std::string> farm_action( const tripoint_abs_omt &omt_t
     return std::make_pair( plots_cnt, crops );
 }
 
-void basecamp::start_farm_op( const tripoint_abs_omt &omt_tgt, const mission_id &miss_id,
+void basecamp::start_farm_op( const point &dir, const mission_id &miss_id,
                               float exertion_level )
 {
     farm_ops op = farm_ops::plow;
@@ -3687,7 +3737,7 @@ void basecamp::start_farm_op( const tripoint_abs_omt &omt_tgt, const mission_id 
         return;
     }
 
-    std::pair<size_t, std::string> farm_data = farm_action( omt_tgt, op );
+    std::pair<size_t, std::string> farm_data = farm_action( dir, op );
     size_t plots_cnt = farm_data.first;
     if( !plots_cnt ) {
         return;
@@ -4530,8 +4580,9 @@ bool basecamp::survey_return( const mission_id &miss_id )
     }
 
     const oter_id &omt_ref = overmap_buffer.ter( where );
+    const std::optional<mapgen_arguments> *maybe_args = overmap_buffer.mapgen_args( where );
     const auto &pos_expansions = recipe_group::get_recipes_by_id( "all_faction_base_expansions",
-                                 omt_ref.id().c_str() );
+                                 omt_ref, maybe_args );
     if( pos_expansions.empty() ) {
         popup( _( "You can't build any expansions in a %s." ), omt_ref.id().c_str() );
         if( query_yn(
@@ -4587,7 +4638,7 @@ bool basecamp::survey_return( const mission_id &miss_id )
     return true;
 }
 
-bool basecamp::farm_return( const mission_id &miss_id, const tripoint_abs_omt &omt_tgt )
+bool basecamp::farm_return( const mission_id &miss_id, const point &dir )
 {
     farm_ops op;
     if( miss_id.id == Camp_Plow ) {
@@ -4608,7 +4659,7 @@ bool basecamp::farm_return( const mission_id &miss_id, const tripoint_abs_omt &o
         return false;
     }
 
-    farm_action( omt_tgt, op, comp );
+    farm_action( dir, op, comp );
 
     Character &player_character = get_player_character();
     //Give any seeds the NPC didn't use back to you.
@@ -4829,21 +4880,9 @@ int om_cutdown_trees( const tripoint_abs_omt &omt_tgt, int chance, bool estimate
             }
             // get a random number that is either 1 or -1
             point dir( 3 * ( 2 * rng( 0, 1 ) - 1 ) + rng( -1, 1 ), 3 * rng( -1, 1 ) + rng( -1, 1 ) );
-            tripoint to = p + tripoint( dir, omt_tgt.z() );
-            std::vector<tripoint> tree = line_to( p, to, rng( 1, 8 ) );
-            for( tripoint &elem : tree ) {
-                target_bay.destroy( elem );
-                target_bay.ter_set( elem, ter_t_trunk );
-            }
-            target_bay.ter_set( p, ter_t_dirt );
-            for( int z = p.z + 1; z <= OVERMAP_HEIGHT; z++ ) {
-                const tripoint up_tree = tripoint{ p.xy(), z};
-                if( target_bay.ter( up_tree ) == ter_t_treetop ) {
-                    target_bay.ter_set( up_tree, ter_t_open_air );
-                } else {
-                    break;
-                }
-            }
+
+            target_bay.cut_down_tree( tripoint_omt_ms( p ), dir );
+            target_bay.collapse_at( p, true, true, false );
             harvested++;
         }
     }
@@ -4856,7 +4895,7 @@ int om_cutdown_trees( const tripoint_abs_omt &omt_tgt, int chance, bool estimate
     }
     // having cut down the trees, cut the trunks into logs
     for( const tripoint &p : target_bay.points_in_rectangle( mapmin, mapmax ) ) {
-        if( target_bay.ter( p ) == ter_t_trunk ) {
+        if( target_bay.ter( p ) == ter_t_trunk || target_bay.ter( p ) == ter_t_stump ) {
             target_bay.ter_set( p, ter_t_dirt );
             target_bay.spawn_item( p, itype_log, rng( 2, 3 ), 0, calendar::turn );
             harvested++;
@@ -5496,10 +5535,10 @@ std::string basecamp::gathering_description()
     return output;
 }
 
-std::string basecamp::farm_description( const tripoint_abs_omt &farm_pos, size_t &plots_count,
+std::string basecamp::farm_description( const point &dir, size_t &plots_count,
                                         farm_ops operation )
 {
-    std::pair<size_t, std::string> farm_data = farm_action( farm_pos, operation );
+    std::pair<size_t, std::string> farm_data = farm_action( dir, operation );
     std::string entry;
     plots_count = farm_data.first;
     switch( operation ) {
@@ -5538,7 +5577,7 @@ nutrients basecamp::camp_food_supply( nutrients &change )
         double percent_consumed = std::abs( static_cast<double>( change.calories ) ) /
                                   fac()->food_supply.calories;
         consumed = fac()->food_supply;
-        if( std::abs( change.calories ) > fac()->food_supply.calories ) {
+        if( std::abs( change.calories ) > fac()->food_supply.calories && fac()->consumes_food ) {
             //Whoops, we don't have enough food. Empty the larder! No crumb shall go un-eaten!
             fac()->food_supply += change;
             faction *yours = get_player_character().get_faction();
@@ -5551,8 +5590,10 @@ nutrients basecamp::camp_food_supply( nutrients &change )
             return consumed;
         }
         consumed *= percent_consumed;
-        // Subtraction since we use the absolute value of change's calories to get the percent
-        fac()->food_supply -= consumed;
+        if( fac()->consumes_food ) {
+            // Subtraction since we use the absolute value of change's calories to get the percent
+            fac()->food_supply -= consumed;
+        }
         return consumed;
     }
     fac()->food_supply += change;
@@ -5589,6 +5630,10 @@ void basecamp::feed_workers( const std::vector<std::reference_wrapper <Character
     food /= num_workers;
     for( const auto &worker_reference : workers ) {
         Character &worker = worker_reference.get();
+        if( !allowed_access_by( worker ) ) {
+            debugmsg( "Character %s improperly tried to access food stores at camp %s, please report this error.",
+                      worker.disp_name(), name );
+        }
         item food_item = make_fake_food( food );
         // Handle allergies and other stuff
         bool query_player = !worker.is_npc();
@@ -5598,6 +5643,7 @@ void basecamp::feed_workers( const std::vector<std::reference_wrapper <Character
                 // I'd like to use consume_activity_actor here, but our little trick with make_fake_food() requires that the
                 // item be consumed immediately.
                 worker.consume( food_item );
+                worker.update_stomach( calendar::turn, calendar::turn ); //Handles setting hunger appropriately
                 break;
             case TOO_FULL:
                 worker.add_msg_player_or_npc( m_neutral,
@@ -5971,7 +6017,7 @@ int basecamp::camp_morale( int change ) const
 void basecamp::place_results( const item &result )
 {
     map &target_bay = get_camp_map();
-    form_storage_zones( target_bay, target_bay.getglobal( target_bay.getlocal( bb_pos ) ) );
+    form_storage_zones( target_bay, bb_pos );
     tripoint new_spot = target_bay.getlocal( get_dumping_spot() );
     // Special handling for liquids
     // find any storage-zoned LIQUIDCONT we can dump them in, set that as the item's destination instead

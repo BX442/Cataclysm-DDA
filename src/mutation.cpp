@@ -56,7 +56,12 @@ static const json_character_flag json_flag_HUGE( "HUGE" );
 static const json_character_flag json_flag_LARGE( "LARGE" );
 static const json_character_flag json_flag_ROOTS2( "ROOTS2" );
 static const json_character_flag json_flag_ROOTS3( "ROOTS3" );
+static const json_character_flag json_flag_SHAPESHIFT_SIZE_HUGE( "SHAPESHIFT_SIZE_HUGE" );
+static const json_character_flag json_flag_SHAPESHIFT_SIZE_LARGE( "SHAPESHIFT_SIZE_LARGE" );
+static const json_character_flag json_flag_SHAPESHIFT_SIZE_SMALL( "SHAPESHIFT_SIZE_SMALL" );
+static const json_character_flag json_flag_SHAPESHIFT_SIZE_TINY( "SHAPESHIFT_SIZE_TINY" );
 static const json_character_flag json_flag_SMALL( "SMALL" );
+static const json_character_flag json_flag_TEMPORARY_SHAPESHIFT( "TEMPORARY_SHAPESHIFT" );
 static const json_character_flag json_flag_TINY( "TINY" );
 static const json_character_flag json_flag_TREE_COMMUNION_PLUS( "TREE_COMMUNION_PLUS" );
 
@@ -178,8 +183,9 @@ int Character::get_instability_per_category( const mutation_category_id &categ )
     bool robust = has_trait( trait_ROBUST );
     // For each and every trait we have...
     for( const trait_id &mut : get_mutations() ) {
-        // only count muts that have 0 or more points, aren't a threshold, are valid, and aren't a base trait.
-        if( mut.obj().points > -1 && !mut.obj().threshold && mut.obj().valid && !has_base_trait( mut ) ) {
+        // only count muts that have 0 or more points, aren't a threshold, have a category, and aren't a base trait.
+        if( mut.obj().points > -1 && !mut.obj().threshold && !mut.obj().category.empty() &&
+            !has_base_trait( mut ) ) {
             bool in_categ = false;
             // If among all allowed categories the mutation has, the input category is one of them.
             for( const mutation_category_id &Ch_cat : mut.obj().category ) {
@@ -486,16 +492,30 @@ const resistances &mutation_branch::damage_resistance( const bodypart_id &bp ) c
 
 void Character::recalculate_size()
 {
-    if( has_flag( json_flag_TINY ) ) {
-        size_class = creature_size::tiny;
-    } else if( has_flag( json_flag_SMALL ) ) {
-        size_class = creature_size::small;
-    } else if( has_flag( json_flag_LARGE ) ) {
-        size_class = creature_size::large;
-    } else if( has_flag( json_flag_HUGE ) ) {
-        size_class = creature_size::huge;
+    if( has_flag( json_flag_TEMPORARY_SHAPESHIFT ) ) {
+        if( has_flag( json_flag_SHAPESHIFT_SIZE_TINY ) ) {
+            size_class = creature_size::tiny;
+        } else if( has_flag( json_flag_SHAPESHIFT_SIZE_SMALL ) ) {
+            size_class = creature_size::small;
+        } else if( has_flag( json_flag_SHAPESHIFT_SIZE_LARGE ) ) {
+            size_class = creature_size::large;
+        } else if( has_flag( json_flag_SHAPESHIFT_SIZE_HUGE ) ) {
+            size_class = creature_size::huge;
+        } else {
+            size_class = creature_size::medium;
+        }
     } else {
-        size_class = creature_size::medium;
+        if( has_flag( json_flag_TINY ) ) {
+            size_class = creature_size::tiny;
+        } else if( has_flag( json_flag_SMALL ) ) {
+            size_class = creature_size::small;
+        } else if( has_flag( json_flag_LARGE ) ) {
+            size_class = creature_size::large;
+        } else if( has_flag( json_flag_HUGE ) ) {
+            size_class = creature_size::huge;
+        } else {
+            size_class = creature_size::medium;
+        }
     }
 }
 
@@ -1316,7 +1336,7 @@ void Character::mutate_category( const mutation_category_id &cat, const bool use
     }
 
     add_msg_debug( debugmode::DF_MUTATION, "mutate_category: mutate_towards category %s", cat.c_str() );
-    if( select_mutation || mutation_selector( valid, cat, use_vitamins ) ) {
+    if( select_mutation && mutation_selector( valid, cat, use_vitamins ) ) {
         // Stop if mutation properly handled by mutation selector
         return;
     }
@@ -1636,6 +1656,19 @@ bool Character::mutate_towards( const trait_id &mut, const mutation_category_id 
             add_msg_debug( debugmode::DF_MUTATION, "mutate_towards: necessary threshold %s found",
                            threshreq[i].c_str() );
             c_has_threshreq = true;
+        }
+        for( const trait_id &subst : threshreq[i]->threshold_substitutes ) {
+            if( has_trait( subst ) ) {
+                add_msg_debug( debugmode::DF_MUTATION, "mutate_towards: substitute threshold %s found",
+                               subst.c_str() );
+                if( mdata.strict_threshreq ) {
+                    add_msg_debug( debugmode::DF_MUTATION,
+                                   "mutate_towards: …but no threshold substitutions allowed for trait %s",
+                                   subst.c_str(), mdata.name() );
+                    continue;
+                }
+                c_has_threshreq = true;
+            }
         }
     }
 

@@ -1,6 +1,7 @@
 #include "computer_session.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <functional>
 #include <memory>
@@ -12,9 +13,9 @@
 #include "calendar.h"
 #include "character.h"
 #include "character_id.h"
-#include "computer.h"
 #include "colony.h"
 #include "color.h"
+#include "computer.h"
 #include "coordinate_conversions.h"
 #include "coordinates.h"
 #include "creature.h"
@@ -31,9 +32,11 @@
 #include "game_inventory.h"
 #include "input.h"
 #include "input_context.h"
+#include "input_enums.h"
 #include "item.h"
 #include "item_location.h"
 #include "line.h"
+#include "localized_comparator.h"
 #include "map.h"
 #include "map_iterator.h"
 #include "mapdata.h"
@@ -42,6 +45,8 @@
 #include "monster.h"
 #include "mtype.h"
 #include "mutation.h"
+#include "npc.h"
+#include "omdata.h"
 #include "options.h"
 #include "output.h"
 #include "overmap.h"
@@ -55,6 +60,7 @@
 #include "string_formatter.h"
 #include "text_snippets.h"
 #include "timed_event.h"
+#include "translation.h"
 #include "translations.h"
 #include "trap.h"
 #include "type_id.h"
@@ -65,6 +71,7 @@ static const efftype_id effect_amigara( "amigara" );
 
 static const furn_str_id furn_f_centrifuge( "f_centrifuge" );
 static const furn_str_id furn_f_console_broken( "f_console_broken" );
+static const furn_str_id furn_f_counter( "f_counter" );
 static const furn_str_id furn_f_rubble_rock( "f_rubble_rock" );
 
 static const itype_id itype_black_box( "black_box" );
@@ -130,6 +137,8 @@ static const ter_str_id ter_t_vat( "t_vat" );
 static const ter_str_id ter_t_wall_glass( "t_wall_glass" );
 static const ter_str_id ter_t_wall_metal( "t_wall_metal" );
 static const ter_str_id ter_t_water_pool( "t_water_pool" );
+
+static const trap_str_id tr_portal( "tr_portal" );
 
 static catacurses::window init_window()
 {
@@ -375,14 +384,14 @@ bool computer_session::can_activate( computer_action action )
 {
     switch( action ) {
         case COMPACT_LOCK:
-            return get_map().has_nearby_ter( get_player_character().pos(), ter_t_door_metal_c, 8 );
+            return get_map().has_nearby_ter( get_player_character().pos_bub(), ter_t_door_metal_c, 8 );
 
         case COMPACT_RELEASE:
         case COMPACT_RELEASE_DISARM:
-            return get_map().has_nearby_ter( get_player_character().pos(), ter_t_reinforced_glass, 25 );
+            return get_map().has_nearby_ter( get_player_character().pos_bub(), ter_t_reinforced_glass, 25 );
 
         case COMPACT_RELEASE_BIONICS:
-            return get_map().has_nearby_ter( get_player_character().pos(), ter_t_reinforced_glass, 3 );
+            return get_map().has_nearby_ter( get_player_character().pos_bub(), ter_t_reinforced_glass, 3 );
 
         case COMPACT_TERMINATE: {
             map &here = get_map();
@@ -404,7 +413,7 @@ bool computer_session::can_activate( computer_action action )
 
         case COMPACT_UNLOCK:
         case COMPACT_UNLOCK_DISARM:
-            return get_map().has_nearby_ter( get_player_character().pos(), ter_t_door_metal_locked, 8 );
+            return get_map().has_nearby_ter( get_player_character().pos_bub(), ter_t_door_metal_locked, 8 );
 
         default:
             return true;
@@ -502,7 +511,7 @@ void computer_session::action_sample()
             continue;
         }
         for( const tripoint &n : here.points_in_radius( p, 1 ) ) {
-            if( here.furn( n ) != f_counter ) {
+            if( here.furn( n ) != furn_f_counter ) {
                 continue;
             }
             bool found_item = false;

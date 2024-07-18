@@ -64,6 +64,7 @@ static const efftype_id effect_downed( "downed" );
 static const efftype_id effect_dragging( "dragging" );
 static const efftype_id effect_grabbed( "grabbed" );
 static const efftype_id effect_harnessed( "harnessed" );
+static const efftype_id effect_immobilization( "immobilization" );
 static const efftype_id effect_led_by_leash( "led_by_leash" );
 static const efftype_id effect_no_sight( "no_sight" );
 static const efftype_id effect_operating( "operating" );
@@ -132,64 +133,6 @@ static bool z_is_valid( int z )
     return z >= -OVERMAP_DEPTH && z <= OVERMAP_HEIGHT;
 }
 
-bool monster::monster_move_in_vehicle( const tripoint &p ) const
-{
-    map &m = get_map();
-    monster critter = *this;
-    const optional_vpart_position vp = m.veh_at( p );
-    if( vp.has_value() ) {
-        vehicle &veh = vp->vehicle();
-        units::volume capacity = 0_ml;
-        units::volume free_cargo = 0_ml;
-        auto cargo_parts = veh.get_parts_at( p, "CARGO", part_status_flag::any );
-        for( vehicle_part *&part : cargo_parts ) {
-            vehicle_stack contents = veh.get_items( *part );
-            if( !vp.part_with_feature( "CARGO_PASSABLE", false ) &&
-                !vp.part_with_feature( "APPLIANCE", false ) && !vp.part_with_feature( "OBSTACLE", false ) ) {
-                capacity += contents.max_volume();
-                free_cargo += contents.free_volume();
-            }
-        }
-        if( capacity > 0_ml ) {
-            // First, we'll try to squeeze in. Open-topped vehicle parts have more room to step over cargo.
-            if( !veh.enclosed_at( p ) ) {
-                free_cargo *= 1.2;
-            }
-            if( !veh.enclosed_at( p ) && flies() ) {
-                return true; // No amount of cargo will block a flying monster if there's no roof.
-            }
-            const creature_size size = get_size();
-            if( ( size == creature_size::tiny && free_cargo < 15625_ml ) ||
-                ( size == creature_size::small && free_cargo < 31250_ml ) ||
-                ( size == creature_size::medium && free_cargo < 62500_ml ) ||
-                ( size == creature_size::large && free_cargo < 125000_ml ) ||
-                ( size == creature_size::huge && free_cargo < 250000_ml ) ) {
-                if( ( size == creature_size::tiny && free_cargo < 11719_ml ) ||
-                    ( size == creature_size::small && free_cargo < 23438_ml ) ||
-                    ( size == creature_size::medium && free_cargo < 46875_ml ) ||
-                    ( size == creature_size::large && free_cargo < 93750_ml ) ||
-                    ( size == creature_size::huge && free_cargo < 187500_ml ) ||
-                    ( get_volume() > 850000_ml && !vp.part_with_feature( "HUGE_OK", false ) ) ) {
-                    return false; // Return false if there's just no room whatsoever. Anything over 850 liters will simply never fit in a vehicle part that isn't specifically made for it.
-                    // I'm sorry but you can't let a kaiju ride shotgun.
-                }
-                if( type->bodytype == "snake" || type->bodytype == "blob" || type->bodytype == "fish" ||
-                    has_flag( mon_flag_PLASTIC ) || has_flag( mon_flag_SMALL_HIDER ) ) {
-                    return true; // Return true if we're wiggly enough to be fine with cramped space.
-                }
-                critter.add_effect( effect_cramped_space, 2_turns, true );
-                return true; // Otherwise we add the effect and return true.
-            }
-            if( size == creature_size::huge && !vp.part_with_feature( "AISLE", false ) &&
-                !vp.part_with_feature( "HUGE_OK", false ) ) {
-                critter.add_effect( effect_cramped_space, 2_turns, true );
-                return true; // Sufficiently gigantic creatures have trouble in stock seats, roof or no.
-            }
-        }
-    }
-    return true;
-}
-
 bool monster::will_move_to( const tripoint &p ) const
 {
     map &here = get_map();
@@ -217,7 +160,7 @@ bool monster::will_move_to( const tripoint &p ) const
     if( has_flag( mon_flag_AQUATIC ) && (
             !here.has_flag( ter_furn_flag::TFLAG_SWIMMABLE, p ) ||
             // AQUATIC (confined to water) monster avoid vehicles, unless they are already underneath one
-            ( here.veh_at( p ) && !here.veh_at( pos() ) )
+            ( here.veh_at( p ) && !here.veh_at( pos_bub() ) )
         ) ) {
         return false;
     }
@@ -240,32 +183,19 @@ bool monster::know_danger_at( const tripoint &p ) const
 
     // Various avoiding behaviors.
 
-    bool avoid_fire = has_flag( mon_flag_PATH_AVOID_FIRE );
-    bool avoid_fall = has_flag( mon_flag_PATH_AVOID_FALL );
-    bool avoid_simple = has_flag( mon_flag_PATH_AVOID_DANGER_1 );
-    bool avoid_complex = has_flag( mon_flag_PATH_AVOID_DANGER_2 );
-    bool avoid_sharp = get_pathfinding_settings().avoid_sharp;
+    bool avoid_simple = has_flag( mon_flag_PATH_AVOID_DANGER );
+
+    bool avoid_fire = avoid_simple || has_flag( mon_flag_PATH_AVOID_FIRE );
+    bool avoid_fall = avoid_simple || has_flag( mon_flag_PATH_AVOID_FALL );
+    bool avoid_sharp = avoid_simple || get_pathfinding_settings().avoid_sharp;
+
+    bool avoid_dangerous_fields = get_pathfinding_settings().avoid_dangerous_fields;
     bool avoid_traps = get_pathfinding_settings().avoid_traps;
-    /*
-     * Because some avoidance behaviors are supersets of others,
-     * we can cascade through the implications. Complex implies simple,
-     * and simple implies fire and fall.
-     * unfortunately, fall does not necessarily imply fire, nor the converse.
-     */
-    if( avoid_complex ) {
-        avoid_simple = true;
-        avoid_traps = true;
-    }
-    if( avoid_simple ) {
-        avoid_fire = true;
-        avoid_fall = true;
-        avoid_sharp = true;
-    }
 
     // technically this will shortcut in evaluation from fire or fall
     // before hitting simple or complex but this is more explicit
     if( avoid_fire || avoid_fall || avoid_simple ||
-        avoid_complex || avoid_traps || avoid_sharp ) {
+        avoid_traps || avoid_dangerous_fields || avoid_sharp ) {
         const ter_id target = here.ter( p );
         if( !here.has_vehicle_floor( p ) ) {
             // Don't enter lava if we have any concept of heat being bad
@@ -307,11 +237,8 @@ bool monster::know_danger_at( const tripoint &p ) const
 
         const field &target_field = here.field_at( p );
         // Higher awareness is needed for identifying these as threats.
-        if( avoid_complex ) {
-            // Don't enter any dangerous fields
-            if( is_dangerous_fields( target_field ) ) {
-                return false;
-            }
+        if( avoid_dangerous_fields && is_dangerous_fields( target_field ) ) {
+            return false;
         }
 
         // Without avoid_complex, only fire and electricity are checked for field avoidance.
@@ -330,20 +257,20 @@ bool monster::know_danger_at( const tripoint &p ) const
 bool monster::can_reach_to( const tripoint &p ) const
 {
     map &here = get_map();
-    if( p.z > pos().z && z_is_valid( pos().z ) ) {
-        if( here.has_flag( ter_furn_flag::TFLAG_RAMP_UP, tripoint( p.xy(), p.z - 1 ) ) ) {
+    if( p.z > pos_bub().z() && z_is_valid( pos_bub().z() ) ) {
+        if( here.has_flag( ter_furn_flag::TFLAG_RAMP_UP, tripoint_bub_ms( p.x, p.y, p.z - 1 ) ) ) {
             return true;
         }
-        if( !here.has_flag( ter_furn_flag::TFLAG_GOES_UP, pos() ) && here.has_floor( p ) ) {
+        if( !here.has_flag( ter_furn_flag::TFLAG_GOES_UP, pos_bub() ) && here.has_floor( p ) ) {
             // can't go through the roof
             return false;
         }
-    } else if( p.z < pos().z && z_is_valid( pos().z ) ) {
-        const tripoint above( p.xy(), p.z + 1 );
+    } else if( p.z < pos_bub().z() && z_is_valid( pos_bub().z() ) ) {
+        const tripoint_bub_ms above = tripoint_bub_ms( p + tripoint_above );
         if( here.has_flag( ter_furn_flag::TFLAG_RAMP_DOWN, above ) ) {
             return true;
         }
-        if( !here.has_flag( ter_furn_flag::TFLAG_GOES_DOWN, pos() ) &&
+        if( !here.has_flag( ter_furn_flag::TFLAG_GOES_DOWN, pos_bub() ) &&
             ( here.has_floor( above ) || ( !flies() && !here.has_floor_or_water( above ) ) ) ) {
             // can't go through the floor
             // Check floors for flying monsters movement
@@ -356,6 +283,11 @@ bool monster::can_reach_to( const tripoint &p ) const
 bool monster::can_move_to( const tripoint &p ) const
 {
     return can_reach_to( p ) && will_move_to( p );
+}
+
+bool monster::can_move_to( const tripoint_bub_ms &p ) const
+{
+    return monster::can_move_to( p.raw() );
 }
 
 float monster::rate_target( Creature &c, float best, bool smart ) const
@@ -969,6 +901,10 @@ void monster::move()
         moves = 0;
         return;
     }
+    if( has_effect( effect_immobilization ) ) {
+        moves = 0;
+        return;
+    }
     if( has_effect( effect_stunned ) || has_effect( effect_psi_stunned ) ) {
         stumble();
         moves = 0;
@@ -977,7 +913,7 @@ void monster::move()
     if( friendly > 0 ) {
         --friendly;
     }
-    const optional_vpart_position ovp = here.veh_at( pos() );
+    const optional_vpart_position ovp = here.veh_at( pos_bub() );
     if( has_effect( effect_harnessed ) ) {
         if( !ovp.part_with_feature( "ANIMAL_CTRL", true ) ) {
             remove_effect( effect_harnessed ); // the harness part probably broke
@@ -1085,10 +1021,7 @@ void monster::move()
                 } else {
                     path = here.straight_route( pos(), local_dest );
                     if( !path.empty() ) {
-                        std::unordered_set<tripoint> closed = get_path_avoid();
-                        if( std::any_of( path.begin(), path.end(), [&closed]( const tripoint & p ) {
-                        return closed.count( p );
-                        } ) ) {
+                        if( std::any_of( path.begin(), path.end(), get_path_avoid() ) ) {
                             path.clear();
                         }
                     }
@@ -1247,7 +1180,7 @@ void monster::move()
 
             // is there an openable door?
             if( can_open_doors &&
-                here.open_door( *this, candidate, !here.is_outside( pos() ), true ) ) {
+                here.open_door( *this, candidate, !here.is_outside( pos_bub() ), true ) ) {
                 moved = true;
                 next_step = candidate_abs;
                 continue;
@@ -1300,7 +1233,7 @@ void monster::move()
         const bool did_something =
             ( !pacified && attack_at( local_next_step ) ) ||
             ( !pacified && can_open_doors &&
-              here.open_door( *this, local_next_step, !here.is_outside( pos() ) ) ) ||
+              here.open_door( *this, local_next_step, !here.is_outside( pos_bub() ) ) ) ||
             ( !pacified && bash_at( local_next_step ) ) ||
             ( !pacified && push_to( local_next_step, 0, 0 ) ) ||
             move_to( local_next_step, false, false, get_stagger_adjust( pos(), destination, local_next_step ) );
@@ -1691,7 +1624,8 @@ bool monster::bash_at( const tripoint &p )
         return false;
     }
 
-    bool try_bash = !can_move_to( p ) || one_in( 3 );
+    const bool cramped = will_be_cramped_in_vehicle_tile( get_map().getglobal( p ) );
+    bool try_bash = !can_move_to( p ) || one_in( 3 ) || cramped;
     if( !try_bash ) {
         return false;
     }
@@ -1701,7 +1635,7 @@ bool monster::bash_at( const tripoint &p )
     }
 
     map &here = get_map();
-    if( !( here.is_bashable_furn( p ) || here.veh_at( p ).obstacle_at_part() ) ) {
+    if( !( here.is_bashable_furn( p ) || here.veh_at( p ).obstacle_at_part() || cramped ) ) {
         // if the only thing here is road or flat, rarely bash it
         bool flat_ground = here.has_flag( ter_furn_flag::TFLAG_ROAD, p ) ||
                            here.has_flag( ter_furn_flag::TFLAG_FLAT, p );
@@ -1854,8 +1788,8 @@ bool monster::move_to( const tripoint &p, bool force, bool step_on_critter,
 {
     const bool on_ground = !digging() && !flies();
 
-    const bool z_move = p.z != pos().z;
-    const bool going_up = p.z > pos().z;
+    const bool z_move = p.z != pos_bub().z();
+    const bool going_up = p.z > pos_bub().z();
 
     tripoint destination = p;
     map &here = get_map();
@@ -1863,17 +1797,13 @@ bool monster::move_to( const tripoint &p, bool force, bool step_on_critter,
     // This is stair teleportation hackery.
     // TODO: Remove this in favor of stair alignment
     if( going_up ) {
-        if( here.has_flag( ter_furn_flag::TFLAG_GOES_UP, pos() ) ) {
+        if( here.has_flag( ter_furn_flag::TFLAG_GOES_UP, pos_bub() ) ) {
             destination = find_closest_stair( p, ter_furn_flag::TFLAG_GOES_DOWN );
         }
     } else if( z_move ) {
-        if( here.has_flag( ter_furn_flag::TFLAG_GOES_DOWN, pos() ) ) {
+        if( here.has_flag( ter_furn_flag::TFLAG_GOES_DOWN, pos_bub() ) ) {
             destination = find_closest_stair( p, ter_furn_flag::TFLAG_GOES_UP );
         }
-    }
-
-    if( here.veh_at( p ).part_with_feature( VPFLAG_CARGO, true ) && !monster_move_in_vehicle( p ) ) {
-        return false;
     }
 
     // Allows climbing monsters to move on terrain with movecost <= 0
@@ -1939,7 +1869,7 @@ bool monster::move_to( const tripoint &p, bool force, bool step_on_critter,
         if( was_water && flies() ) {
             if( one_in( 4 ) ) {
                 add_msg_if_player_sees( *this, m_warning, _( "A %1$s flies over the %2$s!" ),
-                                        name(), here.tername( pos() ) );
+                                        name(), here.tername( pos_bub() ) );
             }
         } else if( was_water && !will_be_water ) {
             // Use more dramatic messages for swimming monsters
@@ -1948,7 +1878,7 @@ bool monster::move_to( const tripoint &p, bool force, bool step_on_critter,
                                     //~ %1$s: monster name, %2$s: leaps/emerges, %3$s: terrain name
                                     pgettext( "monster movement", "A %1$s %2$s from the %3$s!" ),
                                     name(), swims() ||
-                                    has_flag( mon_flag_AQUATIC ) ? _( "leaps" ) : _( "emerges" ), here.tername( pos() ) );
+                                    has_flag( mon_flag_AQUATIC ) ? _( "leaps" ) : _( "emerges" ), here.tername( pos_bub() ) );
         } else if( !was_water && will_be_water ) {
             add_msg_if_player_sees( *this, m_warning, pgettext( "monster movement",
                                     //~ Message when a monster enters water
@@ -1970,6 +1900,9 @@ bool monster::move_to( const tripoint &p, bool force, bool step_on_critter,
     optional_vpart_position vp_dest = here.veh_at( destination );
     if( vp_dest ) {
         vp_dest->vehicle().invalidate_mass();
+        if( will_be_cramped_in_vehicle_tile( here.getglobal( p ) ) ) {
+            add_effect( effect_cramped_space, 2_turns, true );
+        }
     }
     if( is_hallucination() ) {
         //Hallucinations don't do any of the stuff after this point
@@ -1993,11 +1926,11 @@ bool monster::move_to( const tripoint &p, bool force, bool step_on_critter,
         if( type->size != creature_size::tiny && on_ground ) {
             const int sharp_damage = rng( 1, 10 );
             const int rough_damage = rng( 1, 2 );
-            if( here.has_flag( ter_furn_flag::TFLAG_SHARP, pos() ) && !one_in( 4 ) &&
+            if( here.has_flag( ter_furn_flag::TFLAG_SHARP, pos_bub() ) && !one_in( 4 ) &&
                 get_armor_type( damage_cut, bodypart_id( "torso" ) ) < sharp_damage && get_hp() > sharp_damage ) {
                 apply_damage( nullptr, bodypart_id( "torso" ), sharp_damage );
             }
-            if( here.has_flag( ter_furn_flag::TFLAG_ROUGH, pos() ) && one_in( 6 ) &&
+            if( here.has_flag( ter_furn_flag::TFLAG_ROUGH, pos_bub() ) && one_in( 6 ) &&
                 get_armor_type( damage_cut, bodypart_id( "torso" ) ) < rough_damage && get_hp() > rough_damage ) {
                 apply_damage( nullptr, bodypart_id( "torso" ), rough_damage );
             }
@@ -2008,12 +1941,12 @@ bool monster::move_to( const tripoint &p, bool force, bool step_on_critter,
         }
     }
     if( !will_be_water && ( digs() || can_dig() ) ) {
-        underwater = here.has_flag( ter_furn_flag::TFLAG_DIGGABLE, pos() );
+        underwater = here.has_flag( ter_furn_flag::TFLAG_DIGGABLE, pos_bub() );
     }
 
     // Digging creatures leave a trail of churned earth
     // They always leave some on their tile, and larger creatures emit some around themselves as well
-    if( digging() && here.has_flag( ter_furn_flag::TFLAG_DIGGABLE, pos() ) ) {
+    if( digging() && here.has_flag( ter_furn_flag::TFLAG_DIGGABLE, pos_bub() ) ) {
         int factor = 0;
         switch( type->size ) {
             case creature_size::medium:
@@ -2268,7 +2201,7 @@ void monster::stumble()
             //But let them wander OUT of water if they are there.
             !( avoid_water &&
                here.has_flag( ter_furn_flag::TFLAG_SWIMMABLE, dest ) &&
-               !here.has_flag( ter_furn_flag::TFLAG_SWIMMABLE, pos() ) ) &&
+               !here.has_flag( ter_furn_flag::TFLAG_SWIMMABLE, pos_bub() ) ) &&
             ( creatures.creature_at( dest, is_hallucination() ) == nullptr ) ) {
             if( move_to( dest, true, false ) ) {
                 break;

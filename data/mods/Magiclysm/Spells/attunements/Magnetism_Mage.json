@@ -190,7 +190,7 @@
     "max_range": 20,
     "base_casting_time": 400,
     "base_energy_cost": 600,
-    "extra_effects": [ { "id": "railgun_sparks" }, { "id": "eoc_evocation_setup" } ]
+    "extra_effects": [ { "id": "railgun_sparks" }, { "id": "eoc_evocation_setup", "hit_self": true } ]
   },
   {
     "id": "railgun_sparks",
@@ -236,7 +236,7 @@
     "base_energy_cost": 500,
     "final_energy_cost": 150,
     "energy_increment": -10,
-    "extra_effects": [ { "id": "magnetismmage_electrolaser_electro" }, { "id": "eoc_evocation_setup" } ]
+    "extra_effects": [ { "id": "magnetismmage_electrolaser_electro" }, { "id": "eoc_evocation_setup", "hit_self": true } ]
   },
   {
     "id": "magnetismmage_electrolaser_electro",
@@ -261,7 +261,7 @@
     "id": "robot_disabler",
     "type": "SPELL",
     "name": "Surge mod moves",
-    "description": "Substract some moves from targeted_monster_ids monsters.  Subspell; you aren't allowed to see it except in debug mode.",
+    "description": "Subtract some moves from targeted_monster_ids monsters.  Subspell; you aren't allowed to see it except in debug mode.",
     "valid_targets": [ "hostile" ],
     "targeted_monster_species": [ "ROBOT", "CYBORG" ],
     "effect": "mod_moves",
@@ -308,6 +308,6 @@
     "casting_time_increment": -9,
     "final_casting_time": 100,
     "max_level": 35,
-    "extra_effects": [ { "id": "robot_disabler" }, { "id": "eoc_evocation_setup" } ]
+    "extra_effects": [ { "id": "robot_disabler" }, { "id": "eoc_evocation_setup", "hit_self": true } ]
   }
 ]
